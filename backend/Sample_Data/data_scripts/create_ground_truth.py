@@ -3,7 +3,6 @@ import numpy as np
 import os
 
 # --- CONFIGURATION ---
-# This path is correct based on your previous messages.
 NPPES_FULL_FILE = '/home/sk/NPPES_Data_Dissemination_September_2025_V2/npidata_pfile_20050523-20250907.csv'
 
 # The final clean CSV file will be saved here.
@@ -12,7 +11,6 @@ GROUND_TRUTH_OUTPUT_FILE = 'ground_truth.csv'
 # Number of providers to select for our sample dataset.
 SAMPLE_SIZE = 1000
 
-# UPDATED: These are the exact column names from your file's header.
 # We will read these columns to create the full name and select the practice address.
 COLUMNS_TO_READ = [
     'NPI',
