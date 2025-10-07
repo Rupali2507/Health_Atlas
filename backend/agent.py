@@ -1,124 +1,145 @@
-# backend/agent.py
 import os
 import json
 from typing import TypedDict, Annotated, List
-from langchain_core.tools import tool
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, ToolMessage
 from langchain_groq import ChatGroq
 from langgraph.graph import StateGraph, END
-from langgraph.graph.message import add_messages
-from langgraph.prebuilt import ToolNode
 from dotenv import load_dotenv
 from thefuzz import fuzz
 
-# --- Import and Decorate Tools ---
-from tools import search_npi_registry, parse_pdf_with_vlm, scrape_website_for_text, validate_address
+from tools import search_npi_registry, validate_address
 
 load_dotenv()
 
-# --- TOOL DEFINITIONS ---
-
-@tool
-def npi_registry_tool(full_name: str, state: str) -> str:
-    """
-    Searches the NPI registry for a provider using their full name and state.
-    The full name should be the provider's complete name.
-    """
-    name_parts = full_name.strip().split()
-    first_name = name_parts[0] if name_parts else ""
-    last_name = name_parts[-1] if len(name_parts) > 1 else ""
-    if not first_name or not last_name:
-        return json.dumps({"error": "Could not determine a first and last name from the provided full_name."})
-    return search_npi_registry(first_name=first_name, last_name=last_name, state=state)
-
-@tool
-def pdf_parser_tool(pdf_path: str) -> str:
-    """Parses a PDF document to extract text and tables using a VLM."""
-    return parse_pdf_with_vlm(pdf_path=pdf_path)
-
-@tool
-def web_scraper_tool(url: str) -> str:
-    """Scrapes a website to extract all visible text content."""
-    return scrape_website_for_text(url=url)
-
-@tool
-# ✅ CHANGED: Changed 'list' to 'List[str]' for the address_lines parameter
-def address_validator_tool(address_lines: List[str], region_code: str, locality: str, postal_code: str) -> str:
-    """Validates a physical address using the Google Maps Address Validation API."""
-    return validate_address(address_lines, region_code, locality, postal_code)
-
-tools = [npi_registry_tool, pdf_parser_tool, web_scraper_tool, address_validator_tool]
-
-# --- AGENT STATE ---
 class AgentState(TypedDict):
-    messages: Annotated[List[BaseMessage], add_messages]
-    log: List[str]
     initial_data: dict
+    log: List[str]
+    npi_result: dict
+    address_result: dict
     final_profile: dict
     confidence_score: float
 
-# --- AGENT NODES ---
 
 llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
-llm_with_tools = llm.bind_tools(tools)
 
-def agent_node(state: AgentState):
-    """Invokes the LLM to decide the next action or respond."""
-    print("---AGENT NODE---")
-    response = llm_with_tools.invoke(state['messages'])
-    return {"messages": [response], "log": state['log'] + [f"Agent decided: {response.tool_calls}"]}
 
-tool_node = ToolNode(tools)
+def call_npi_tool(state: AgentState) -> dict:
+    """First step: Call the NPI Registry tool."""
+    print("---PIPELINE STEP 1: CALLING NPI TOOL---")
+    initial_data = state["initial_data"]
+    
+    name_parts = initial_data.get("full_name", "").strip().split()
+    first_name = name_parts[0] if name_parts else ""
+    last_name = name_parts[-1] if len(name_parts) > 1 else ""
+    npi_number = initial_data.get("NPI", "")
+    st = initial_data.get("state", "")
+
+    result = search_npi_registry(first_name=first_name, last_name=last_name, npi_number=npi_number)
+    log_entry = f"NPI tool called. Result: {json.dumps(result)}"
+    
+    return {"npi_result": result, "log": state['log'] + [log_entry]}
+
+def call_address_tool(state: AgentState) -> dict:
+    """Second step: Call the Address Validation tool."""
+    print("---PIPELINE STEP 2: CALLING ADDRESS TOOL---")
+    initial_data = state["initial_data"]
+
+    result = validate_address(
+        address=initial_data.get("address", ""),
+        city=initial_data.get("city", ""),
+        state=initial_data.get("state", ""),
+        zip_code=initial_data.get("zip_code", "")
+    )
+    log_entry = f"Address tool called. Result: {json.dumps(result)}"
+
+    return {"address_result": result, "log": state['log'] + [log_entry]}
+
+def synthesis_node(state: AgentState) -> dict:
+    """Third step: Ask the LLM to synthesize the results into the final JSON."""
+    print("---PIPELINE STEP 3: SYNTHESIZING RESULTS---")
+    
+    prompt = f"""
+    You are a data synthesis robot.
+    Based on the initial data and the results from two tools, create a single, clean JSON object.
+    
+    Initial Data: {json.dumps(state['initial_data'])}
+    NPI Tool Result: {json.dumps(state['npi_result'])}
+    Address Tool Result: {json.dumps(state['address_result'])}
+
+    Synthesize this information into the following JSON format. Your response MUST be ONLY the JSON object.
+
+    Example Output Format:
+    {{
+      "npi_match_found": true,
+      "npi_data": {{ ... NPI Tool Result ... }},
+      "address_validation": {{ ... Address Tool Result ... }},
+      "final_verified_profile": {{
+        "full_name": "...",
+        "npi": "...",
+        "address": "...",
+        "city": "...",
+        "state": "...",
+        "zip_code": "..."
+      }}
+    }}
+    """
+    
+    response = llm.invoke(prompt)
+    log_entry = "Synthesis complete."
+    
+    try:
+        final_json = json.loads(response.content)
+        return {"final_profile": final_json, "log": state['log'] + [log_entry]}
+    except json.JSONDecodeError:
+        log_entry = "ERROR: Failed to decode final JSON from LLM."
+        return {"final_profile": {"error": "Synthesis failed"}, "log": state['log'] + [log_entry]}
+
 
 def confidence_scorer_node(state: AgentState) -> dict:
-    """Calculates a heuristic confidence score based on the agent's findings."""
-    print("---SCORER NODE---")
+    """Final step: Calculate the confidence score based on the clean results."""
+    print("---PIPELINE STEP 4: SCORING---")
     score = 0.0
     log = state.get('log', [])
-    final_data_str = state['messages'][-1].content
-    try:
-        final_data = json.loads(final_data_str)
-    except json.JSONDecodeError:
-        final_data = {}
-        log.append("Warning: Could not decode final JSON from AI message.")
+    final_data = state.get("final_profile", {})
     initial_data = state.get("initial_data", {})
-    if final_data.get("npi_match_found", False):
+
+    if final_data.get("npi_match_found"):
         score += 0.5
         log.append("Score +0.5 (NPI Match Found)")
-    if "npi_data" in final_data and initial_data:
-        npi_name = final_data.get("npi_data", {}).get("basic", {}).get("name", "")
+
+    if "npi_data" in final_data and "basic" in final_data["npi_data"]:
+        npi_name = final_data["npi_data"]["basic"].get("name", "")
         initial_name = initial_data.get('full_name', "")
         if initial_name and npi_name:
-            name_similarity = fuzz.token_set_ratio(initial_name, npi_name)
+            name_similarity = fuzz.token_set_ratio(initial_name.upper(), npi_name.upper())
             if name_similarity > 80:
                 similarity_bonus = 0.2 * (name_similarity / 100)
                 score += similarity_bonus
                 log.append(f"Score +{similarity_bonus:.2f} (Name Similarity: {name_similarity}%)")
+
     if "address_validation" in final_data:
-        granularity = final_data.get("address_validation", {}).get("verdict", {}).get("validation_granularity")
-        if granularity == "PREMISE":
-            score += 0.2
-            log.append("Score +0.2 (Address validated to PREMISE level)")
-        elif granularity == "ROUTE":
-            score += 0.1
-            log.append("Score +0.1 (Address validated to ROUTE level)")
+        verdict = final_data["address_validation"].get("verdict")
+        if verdict == "High Confidence Match":
+            score += 0.3
+            log.append("Score +0.3 (Address: High Confidence Match)")
+        elif verdict == "Medium Confidence Match":
+            score += 0.15
+            log.append("Score +0.15 (Address: Medium Confidence Match)")
+
     final_score = max(0.0, min(1.0, score))
-    return {"confidence_score": final_score, "log": log, "final_profile": final_data}
+    return {"confidence_score": final_score, "log": log}
 
-# --- GRAPH CONSTRUCTION ---
+
 workflow = StateGraph(AgentState)
-workflow.add_node("agent", agent_node)
-workflow.add_node("call_tool", tool_node)
+workflow.add_node("npi_tool", call_npi_tool)
+workflow.add_node("address_tool", call_address_tool)
+workflow.add_node("synthesis", synthesis_node)
 workflow.add_node("scorer", confidence_scorer_node)
-workflow.set_entry_point("agent")
 
-def router(state: AgentState):
-    """Routes the agent to the correct next step."""
-    if state["messages"][-1].tool_calls:
-        return "call_tool"
-    return "scorer"
-
-workflow.add_conditional_edges("agent", router)
-workflow.add_edge("call_tool", "agent")
+workflow.set_entry_point("npi_tool")
+workflow.add_edge("npi_tool", "address_tool")
+workflow.add_edge("address_tool", "synthesis")
+workflow.add_edge("synthesis", "scorer")
 workflow.add_edge("scorer", END)
+
 app = workflow.compile()
