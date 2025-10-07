@@ -1,0 +1,12 @@
+# For data generation
+pandas
+faker
+fpdf2
+
+# For tools.py
+requests
+PyPDF2
+selenium
+beautifulsoup4
+pgeocode
+geoapify
