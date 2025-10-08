@@ -3,7 +3,7 @@ import { Routes, Route } from "react-router-dom";
 import Home from "./Pages/Home";
 
 import Signin from "./Pages/Signin";
-import SignUp from "./Pages/Signup";
+import SignUp from "./Pages/SignUp";
 import Dashboard from "./Pages/Dashboard";
 import Upload from "./Pages/Upload";
 import Provider from "./Pages/Provider";
