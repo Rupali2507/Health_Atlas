@@ -4,9 +4,12 @@ import { FiBell, FiMoon, FiSearch, FiSun, FiUser } from "react-icons/fi";
 
 const Navbar_III = () => {
   return (
-    <div className=" fixed flex justify-between pr-5 w-[100vw]">
-      <div className="w-25 ">
+    <div className="  flex justify-between pr-5 w-[80vw]">
+      <div className="w-25 hidden ">
         <img src={assets.logo} alt="" />
+      </div>
+      <div className="flex items-center p-8 font-medium font-[Poippins] text-xl">
+        Hi User
       </div>
       <div className="flex items-center   ">
         <input
