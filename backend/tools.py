@@ -21,11 +21,11 @@ requests.packages.urllib3.util.connection.allowed_gai_family = allowed_gai_famil
 
 
 # --- TOOL 1: NPI REGISTRY SEARCH ---
-def search_npi_registry(first_name: str = "", last_name: str = "", npi_number: str = "") -> dict:
+def search_npi_registry(first_name: str = "", last_name: str = "", npi_number: str = "", state: str = "") -> dict:
     """Searches the NPPES NPI Registry for a provider."""
     print(f"\nTOOL: Searching NPI Registry for NPI: {npi_number}, Name: {first_name} {last_name}")
     base_url = "https://npiregistry.cms.hhs.gov/api/"
-    params = {k: v for k, v in {"version": "2.1", "first_name": first_name.strip(), "last_name": last_name.strip(), "number": npi_number.strip()}.items() if v}
+    params = {k: v for k, v in {"version": "2.1", "first_name": first_name.strip(), "last_name": last_name.strip(), "number": npi_number.strip(), "state": state.strip()}.items() if v}
     try:
         response = requests.get(base_url, params=params, timeout=10)
         response.raise_for_status()
