@@ -1,13 +1,10 @@
 import pandas as pd
 from fpdf import FPDF
 
-# --- CONFIGURATION ---
-# ✅ PATH CORRECTED: Points up one level and into the Sample_Data folder.
 SOURCE_DATA_FILE = '../Sample_Data/ground_truth.csv'
 PDF_OUTPUT_FILE = '../Sample_Data/provider_directory.pdf'
 
 NUM_RECORDS_FOR_PDF = 20
-# --- END CONFIGURATION ---
 
 class PDF(FPDF):
     def header(self):
