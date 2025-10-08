@@ -43,7 +43,9 @@ const Navbar = ({
             About
           </div>
           <div
-            onClick={scrollToContact}
+            onClick={() => {
+              navigate("/dashboard");
+            }}
             className="cursor-pointer hover:text-blue-600"
           >
             Contact
