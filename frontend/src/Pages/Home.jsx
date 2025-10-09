@@ -8,7 +8,7 @@ import Footer from "../Components/Footer";
 import { useHealthContext } from "../Context/HealthContext";
 
 const Home = () => {
-  const { navigate } = useHealthContext();
+  const { navigate, Dark, setDark } = useHealthContext();
   // Refs for each section
   const featuresRef = useRef(null);
   const howItWorksRef = useRef(null);
@@ -60,7 +60,7 @@ const Home = () => {
             onClick={() => navigate("/signUp")}
             className="border px-5 py-3 mt-3 rounded-2xl bg-blue-950 text-white w-1/2 cursor-pointer "
           >
-            Sign in to Dashboard
+            SignUp to Dashboard
           </button>
         </div>
         <div className="md:w-[50%]">

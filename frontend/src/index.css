@@ -1,2 +1,14 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap");
 @import "tailwindcss";
+
+.dark {
+  --bg-color: #121212;
+  --text-color: #e0e0e0;
+  --card-bg-color: #1e1e1e;
+  --border-color: #333333;
+  --input-bg-color: #1e1e1e;
+  --input-border-color: #444444;
+  --button-bg-color: #333333;
+  --button-text-color: #ffffff;
+  --hover-bg-color: #444444;
+}

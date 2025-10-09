@@ -7,8 +7,11 @@ import SignUp from "./Pages/SignUp";
 import Dashboard from "./Pages/Dashboard";
 import Upload from "./Pages/Upload";
 import Provider from "./Pages/Provider";
+import { useHealthContext } from "./Context/HealthContext";
 
 const App = () => {
+  const { Dark, setDark } = useHealthContext();
+
   return (
     <div>
       <Routes>

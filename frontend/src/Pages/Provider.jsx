@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import Navbar_III from "../Components/Navbar_III";
 import Sidebar from "../Components/Sidebar";
-import { Search, ChevronDown } from "lucide-react";
+import { Search } from "lucide-react";
 import { providerData } from "../assets/assets";
 
 const Provider = () => {
@@ -79,14 +79,14 @@ const Provider = () => {
           </div>
 
           {/* Providers Table */}
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm overflow-x-auto">
             <table className="min-w-full text-left">
               <thead className="bg-gray-100 text-gray-600 uppercase text-sm">
                 <tr>
                   <th className="py-3 px-6">Provider Name</th>
-                  <th className="py-3 px-6">Specialty</th>
-                  <th className="py-3 px-6">Phone</th>
-                  <th className="py-3 px-6">Address</th>
+                  <th className="py-3 px-6 hidden sm:table-cell">Specialty</th>
+                  <th className="py-3 px-6 hidden sm:table-cell">Phone</th>
+                  <th className="py-3 px-6 hidden md:table-cell">Address</th>
                   <th className="py-3 px-6">Confidence</th>
                   <th className="py-3 px-6">Status</th>
                 </tr>
@@ -99,9 +99,15 @@ const Provider = () => {
                       <td className="py-4 px-6 font-semibold text-gray-900">
                         {provider.name}
                       </td>
-                      <td className="py-4 px-6">{provider.specialty}</td>
-                      <td className="py-4 px-6">{provider.phone}</td>
-                      <td className="py-4 px-6">{provider.address}</td>
+                      <td className="py-4 px-6 hidden sm:table-cell">
+                        {provider.specialty}
+                      </td>
+                      <td className="py-4 px-6 hidden sm:table-cell">
+                        {provider.phone}
+                      </td>
+                      <td className="py-4 px-6 hidden md:table-cell">
+                        {provider.address}
+                      </td>
                       <td className="py-4 px-6">
                         <span
                           className={`px-3 py-1 rounded-full text-sm font-medium ${
