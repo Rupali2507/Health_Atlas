@@ -1,6 +1,6 @@
 import { useState } from "react";
 import assets from "../assets/assets";
-import { HiOutlineMenu, HiX } from "react-icons/hi";
+import { HiMoon, HiOutlineMenu, HiSun, HiX } from "react-icons/hi";
 import { useHealthContext } from "../Context/HealthContext";
 const Navbar = ({
   scrollToFeatures,
@@ -10,7 +10,17 @@ const Navbar = ({
 }) => {
   const [showSideBar, setShowSideBar] = useState(false);
   const toggleSideBar = () => setShowSideBar(!showSideBar);
-  const { navigate } = useHealthContext();
+  const { navigate, Dark, setDark } = useHealthContext();
+  const toggleDarkMode = () => {
+    setDark(!Dark);
+
+    const root = document.documentElement;
+    if (!Dark) {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+  };
   return (
     <nav className=" w-full bg-white shadow z-50">
       <div className="flex justify-between items-center px-5 py-4">
@@ -54,11 +64,23 @@ const Navbar = ({
 
         {/* Buttons + Mobile menu */}
         <div className="flex items-center gap-5">
+          <div>
+            <HiSun
+              onClick={() => setDark(false)}
+              className={`${Dark ? "" : "hidden"}w-5 h-5`}
+              color="white"
+            />
+            <HiMoon
+              onClick={() => setDark(true)}
+              className={`${Dark ? "hidden" : ""}w-6 h-6 cursor-pointer`}
+              color="dark-blue"
+            />
+          </div>
           <button
             onClick={() => navigate("/login")}
             className="border-2 px-3.5 py-1 rounded-xl bg-blue-900 text-white"
           >
-            Signin
+            Login
           </button>
           <button
             onClick={() => navigate("/signUp")}
