@@ -1,6 +1,8 @@
 import React from "react";
+import { useHealthContext } from "../Context/HealthContext";
 
 const About = () => {
+  const { navigate } = useHealthContext();
   return (
     <div className="pb-10">
       <h1 className="text-2xl text-center font-[poppins] ml-15 mt-5 mb-15 ">
@@ -16,7 +18,10 @@ const About = () => {
           networks."
         </div>
         <div>Ready to Experience Automated Provider Validation?</div>
-        <button className="border px-5 py-3 mt-3 rounded-2xl bg-blue-950 text-white w-[70%] lg:w-[50%]">
+        <button
+          onClick={() => navigate("/signUp")}
+          className="border px-5 py-3 mt-3 rounded-2xl bg-blue-950 text-white  w-1/2"
+        >
           Sign in to Dashboard
         </button>
 

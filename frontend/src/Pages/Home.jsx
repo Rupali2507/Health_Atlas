@@ -5,8 +5,10 @@ import Features from "../Components/Features";
 import HowItWorks from "../Components/HowItWorks";
 import About from "../Components/About";
 import Footer from "../Components/Footer";
+import { useHealthContext } from "../Context/HealthContext";
 
 const Home = () => {
+  const { navigate, Dark, setDark } = useHealthContext();
   // Refs for each section
   const featuresRef = useRef(null);
   const howItWorksRef = useRef(null);
@@ -54,8 +56,11 @@ const Home = () => {
             errors. Gain real-time insights into your provider network, track
             confidence scores, and quickly identify inconsistencies.
           </div>
-          <button className="border px-5 py-3 mt-3 rounded-2xl bg-blue-950 text-white">
-            Sign in to Dashboard
+          <button
+            onClick={() => navigate("/signUp")}
+            className="border px-5 py-3 mt-3 rounded-2xl bg-blue-950 text-white w-1/2 cursor-pointer "
+          >
+            SignUp to Dashboard
           </button>
         </div>
         <div className="md:w-[50%]">
