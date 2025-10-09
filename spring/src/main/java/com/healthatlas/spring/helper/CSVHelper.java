@@ -31,7 +31,7 @@ public class CSVHelper {
     try (BufferedReader fileReader = new BufferedReader(new InputStreamReader(is, "UTF-8"));
         CSVParser csvParser = new CSVParser(fileReader,
             CSVFormat.DEFAULT.withFirstRecordAsHeader().withIgnoreHeaderCase().withTrim());) {
-                List<DataModel> datamodels = new ArrayList<DataModel>();
+                List<DataModel> datamodels = new ArrayList<>();
                 Iterable<CSVRecord> csvRecords = csvParser.getRecords();
 
       for (CSVRecord csvRecord : csvRecords) {
