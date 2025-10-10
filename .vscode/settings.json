@@ -1,0 +1,7 @@
+{
+  "files.associations": {
+    "*.ejs": "html",
+    "*.scss": "css",
+    "SRTF.C": "cpp"
+  }
+}

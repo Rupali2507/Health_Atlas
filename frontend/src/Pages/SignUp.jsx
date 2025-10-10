@@ -1,15 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useHealthContext } from "../Context/HealthContext";
-import Navbar_II from "../Components/Navbar_II";
+import Navbar from "../Components/Navbar";
 
 const SignUp = () => {
-  const { navigate } = useHealthContext();
+  const { navigate, Dark } = useHealthContext();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
     confirmPassword: "",
   });
+
+  useEffect(() => {
+    if (Dark) document.documentElement.classList.add("dark");
+    else document.documentElement.classList.remove("dark");
+  }, [Dark]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -22,15 +27,22 @@ const SignUp = () => {
       return;
     }
     console.log("Form Data:", formData);
-    // TODO: Add your signup API call here
-    navigate("/login"); // Redirect to login after signup
+    navigate("/login");
   };
 
   return (
-    <div>
-      <Navbar_II />
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-        <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
+    <div
+      className={`min-h-screen transition-colors duration-500 pt-20 ${
+        Dark ? "bg-[#020817]" : "bg-gray-100"
+      }`}
+    >
+      <Navbar />
+      <div className="flex items-center justify-center px-4 pt-20">
+        <div
+          className={`p-8 rounded-xl shadow-md w-full max-w-md transition-colors duration-500 ${
+            Dark ? "bg-gray-800 text-gray-200" : "bg-white text-gray-900"
+          }`}
+        >
           <h2 className="text-2xl font-bold mb-6 text-center">Sign Up</h2>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -40,34 +52,53 @@ const SignUp = () => {
               placeholder="Full Name"
               value={formData.name}
               onChange={handleChange}
-              className="border-2 border-gray-300 rounded-lg p-3 focus:outline-none focus:border-blue-500"
+              className={`border-2 rounded-lg p-3 focus:outline-none focus:border-blue-500 transition-colors duration-300 ${
+                Dark
+                  ? "bg-gray-900 text-gray-200 border-gray-700 placeholder-gray-500"
+                  : "bg-white text-gray-900 border-gray-300"
+              }`}
               required
             />
+
             <input
               type="email"
               name="email"
               placeholder="Email Address"
               value={formData.email}
               onChange={handleChange}
-              className="border-2 border-gray-300 rounded-lg p-3 focus:outline-none focus:border-blue-500"
+              className={`border-2 rounded-lg p-3 focus:outline-none focus:border-blue-500 transition-colors duration-300 ${
+                Dark
+                  ? "bg-gray-900 text-gray-200 border-gray-700 placeholder-gray-500"
+                  : "bg-white text-gray-900 border-gray-300"
+              }`}
               required
             />
+
             <input
               type="password"
               name="password"
               placeholder="Password"
               value={formData.password}
               onChange={handleChange}
-              className="border-2 border-gray-300 rounded-lg p-3 focus:outline-none focus:border-blue-500"
+              className={`border-2 rounded-lg p-3 focus:outline-none focus:border-blue-500 transition-colors duration-300 ${
+                Dark
+                  ? "bg-gray-900 text-gray-200 border-gray-700 placeholder-gray-500"
+                  : "bg-white text-gray-900 border-gray-300"
+              }`}
               required
             />
+
             <input
               type="password"
               name="confirmPassword"
               placeholder="Confirm Password"
               value={formData.confirmPassword}
               onChange={handleChange}
-              className="border-2 border-gray-300 rounded-lg p-3 focus:outline-none focus:border-blue-500"
+              className={`border-2 rounded-lg p-3 focus:outline-none focus:border-blue-500 transition-colors duration-300 ${
+                Dark
+                  ? "bg-gray-900 text-gray-200 border-gray-700 placeholder-gray-500"
+                  : "bg-white text-gray-900 border-gray-300"
+              }`}
               required
             />
 
@@ -79,10 +110,14 @@ const SignUp = () => {
             </button>
           </form>
 
-          <p className="mt-4 text-center text-gray-600">
+          <p
+            className={`mt-4 text-center transition-colors duration-300 ${
+              Dark ? "text-gray-400" : "text-gray-600"
+            }`}
+          >
             Already have an account?{" "}
             <span
-              className="text-blue-600 cursor-pointer"
+              className="text-blue-600 cursor-pointer hover:underline"
               onClick={() => navigate("/login")}
             >
               Login

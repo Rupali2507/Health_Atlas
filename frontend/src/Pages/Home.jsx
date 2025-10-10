@@ -6,35 +6,39 @@ import HowItWorks from "../Components/HowItWorks";
 import About from "../Components/About";
 import Footer from "../Components/Footer";
 import { useHealthContext } from "../Context/HealthContext";
+import Contact from "../Components/Contact";
 
 const Home = () => {
-  const { navigate, Dark, setDark } = useHealthContext();
-  // Refs for each section
+  const { navigate, Dark } = useHealthContext();
+
+  // Refs for scrolling
   const featuresRef = useRef(null);
   const howItWorksRef = useRef(null);
   const aboutRef = useRef(null);
   const contactRef = useRef(null);
 
   // Scroll functions
-  const scrollToFeatures = () => {
+  const scrollToFeatures = () =>
     featuresRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-  const scrollToHowItWorks = () => {
+  const scrollToHowItWorks = () =>
     howItWorksRef.current?.scrollIntoView({
       behavior: "smooth",
       block: "start",
     });
-  };
-  const scrollToAbout = () => {
+  const scrollToAbout = () =>
     aboutRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-  const scrollToContact = () => {
+  const scrollToContact = () =>
     contactRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  // Apply CSS variables to Home wrapper
+  const homeStyle = {
+    backgroundColor: Dark ? "#020817" : "#f9f9f9",
+    color: Dark ? "#e0e0e0" : "#000000",
   };
 
   return (
-    <div>
-      {/* Pass all scroll functions to Navbar */}
+    <div style={homeStyle}>
+      {/* Navbar with scroll functions */}
       <Navbar
         scrollToFeatures={scrollToFeatures}
         scrollToHowItWorks={scrollToHowItWorks}
@@ -42,23 +46,25 @@ const Home = () => {
         scrollToContact={scrollToContact}
       />
 
-      {/* Hero section */}
-      <div className="flex flex-col-reverse md:flex-row">
-        <div className="md:w-[50%] flex flex-col pl-15 justify-center gap-2 mb-10 p-5">
+      {/* Hero Section */}
+      <div className="flex flex-col-reverse md:flex-row pt-30">
+        <div className="md:w-[50%] flex flex-col pl-15 justify-center gap-2 mb-10 p-5 ">
           <div className="text-xl lg:text-3xl font-[Poppins]">
             AI-Powered Healthcare Provider Validation
           </div>
           <div className="text-md lg:text-xl">
             Reduce manual verification time from hours to minutes
           </div>
-          <div className="text-xs md:text-sm">
+          <div className="text-xs md:text-sm text-gray-400">
             Automate provider data validation with AI to save time and reduce
             errors. Gain real-time insights into your provider network, track
             confidence scores, and quickly identify inconsistencies.
           </div>
           <button
             onClick={() => navigate("/signUp")}
-            className="border px-5 py-3 mt-3 rounded-2xl bg-blue-950 text-white w-1/2 cursor-pointer "
+            className={`px-5 py-3 mt-3 rounded-2xl w-1/2 cursor-pointer ${
+              Dark ? "bg-blue-950" : "bg-blue-900 text-white"
+            }`}
           >
             SignUp to Dashboard
           </button>
@@ -69,7 +75,7 @@ const Home = () => {
         </div>
       </div>
 
-      {/* Sections with refs */}
+      {/* Sections */}
       <div ref={featuresRef}>
         <Features />
       </div>
@@ -81,9 +87,13 @@ const Home = () => {
       </div>
       <div
         ref={contactRef}
-        className="h-[300px] flex items-center justify-center bg-gray-100"
+        className="flex items-center justify-center m-5"
+        style={{
+          backgroundColor: "var(--card-bg-color)",
+          color: "var(--text-color)",
+        }}
       >
-        <h2>Contact Section</h2>
+        <Contact />
       </div>
 
       <Footer />
