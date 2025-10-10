@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from thefuzz import fuzz
 import time
 from tools import search_npi_registry, validate_address, scrape_provider_website
+from provider_requests import get_all_providers
 
 load_dotenv()
 
@@ -259,3 +260,53 @@ workflow.add_edge("scorer", END)
 
 # Compile
 app = workflow.compile()
+
+
+def run_agent_on_all_providers():
+    providers = get_all_providers()
+    results = []
+    for provider in providers:
+        initial_data = {
+            "full_name": provider.get("full_name", ""),
+            "NPI": provider.get("npi", ""),
+            "address": provider.get("address", ""),
+            "city": provider.get("city", ""),
+            "state": provider.get("state", ""),
+            "zip_code": provider.get("zip_code", "")
+        }
+        initial_state: AgentState = {
+            "initial_data": initial_data,
+            "log": [],
+            "npi_result": {},
+            "address_result": {},
+            "final_profile": {},
+            "confidence_score": 0.0
+        }
+        final_state = app.invoke(initial_state)
+        results.append(final_state)
+    return results
+
+if __name__ == "__main__":
+    from requests import get_all_providers
+
+    providers = get_all_providers()
+    for provider in providers[:10]:  # limit to first 10 for testing
+        initial_state: AgentState = {
+            "initial_data": {
+                "full_name": provider.get("fullName", ""),
+                "NPI": provider.get("npi", ""),
+                "address": provider.get("address", ""),
+                "city": provider.get("city", ""),
+                "state": provider.get("state", ""),
+                "zip_code": provider.get("zipCode", "")
+            },
+            "log": [],
+            "npi_result": {},
+            "address_result": {},
+            "final_profile": {},
+            "confidence_score": 0.0
+        }
+        final_state = app.invoke(initial_state)
+        print(final_state["final_profile"])
+        print("Confidence:", final_state["confidence_score"])
+        print("-" * 50)

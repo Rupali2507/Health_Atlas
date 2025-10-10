@@ -13,10 +13,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.healthatlas.spring.service.CSVService;
 import com.healthatlas.spring.helper.CSVHelper;
 import com.healthatlas.spring.message.ResponseMessage;
 import com.healthatlas.spring.model.DataModel;
+import com.healthatlas.spring.service.CSVService;
 
 @CrossOrigin("http://localhost:5173")
 @Controller
@@ -46,16 +46,16 @@ public class CSVController {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ResponseMessage(message));
   }
 
-  @GetMapping("/tutorials")
-  public ResponseEntity<List<DataModel>> getAllTutorials() {
+  @GetMapping("/datamodels")
+  public ResponseEntity<List<DataModel>> getAllDataModels() {
     try {
-      List<DataModel> tutorials = fileService.getAllTutorials();
+      List<DataModel> datamodels = fileService.getAllDataModels();
 
-      if (tutorials.isEmpty()) {
+      if (datamodels.isEmpty()) {
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
       }
 
-      return new ResponseEntity<>(tutorials, HttpStatus.OK);
+      return new ResponseEntity<>(datamodels, HttpStatus.OK);
     } catch (Exception e) {
       return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
     }

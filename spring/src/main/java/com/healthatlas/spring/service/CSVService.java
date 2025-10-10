@@ -25,7 +25,7 @@ public class CSVService {
     }
   }
 
-  public List<DataModel> getAllTutorials() {
+  public List<DataModel> getAllDataModels() {
     return repository.findAll();
   }
 }
