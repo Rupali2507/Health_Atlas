@@ -221,7 +221,11 @@ def confidence_scorer_node(state: AgentState) -> dict:
         
         # Address validation
         if "address_validation" in final_data:
-            verdict = final_data.get("address_validation", {}).get("verdict")
+            address_validation = final_data.get("address_validation")
+            if isinstance(address_validation, dict):
+                verdict = address_validation.get("verdict")
+            else:
+                verdict = address_validation  # string fallback
             if verdict == "High Confidence Match":
                 score += 0.3
                 log.append("Score +0.3 (Address: High Confidence)")
@@ -287,7 +291,7 @@ def run_agent_on_all_providers():
     return results
 
 if __name__ == "__main__":
-    from requests import get_all_providers
+    from provider_requests import get_all_providers
 
     providers = get_all_providers()
     for provider in providers[:10]:  # limit to first 10 for testing
