@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 const HealthContext = createContext();
 
@@ -11,14 +12,19 @@ export const HealthProvider = ({ children }) => {
     try {
       const savedRuns = localStorage.getItem("validationRuns");
       return savedRuns ? JSON.parse(savedRuns) : [];
-    } catch { return []; }
+    } catch {
+      return [];
+    }
   });
+  const navigate = useNavigate();
 
   const [selectedProvider, setSelectedProvider] = useState(() => {
     try {
       const savedProvider = sessionStorage.getItem("selectedProvider");
       return savedProvider ? JSON.parse(savedProvider) : null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   });
 
   useEffect(() => {
@@ -33,12 +39,15 @@ export const HealthProvider = ({ children }) => {
 
   useEffect(() => {
     if (selectedProvider) {
-      sessionStorage.setItem("selectedProvider", JSON.stringify(selectedProvider));
+      sessionStorage.setItem(
+        "selectedProvider",
+        JSON.stringify(selectedProvider)
+      );
     } else {
       sessionStorage.removeItem("selectedProvider");
     }
   }, [selectedProvider]);
-  
+
   const addValidationRun = (runDetails) => {
     const newRun = {
       id: new Date().getTime(),
@@ -50,15 +59,17 @@ export const HealthProvider = ({ children }) => {
     localStorage.setItem("validationRuns", JSON.stringify(updatedRuns));
   };
 
-  const value = { 
-    Dark, setDark,
-    validationRuns, addValidationRun,
-    selectedProvider, setSelectedProvider 
+  const value = {
+    Dark,
+    setDark,
+    validationRuns,
+    addValidationRun,
+    selectedProvider,
+    setSelectedProvider,
+    navigate,
   };
 
   return (
-    <HealthContext.Provider value={value}>
-      {children}
-    </HealthContext.Provider>
+    <HealthContext.Provider value={value}>{children}</HealthContext.Provider>
   );
 };

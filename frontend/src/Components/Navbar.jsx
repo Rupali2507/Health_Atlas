@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom"; // ✅ import this
 import assets from "../assets/assets";
 import { HiMoon, HiSun, HiOutlineMenu, HiX } from "react-icons/hi";
 import { useHealthContext } from "../Context/HealthContext";
@@ -11,15 +11,23 @@ const Navbar = ({
   scrollToContact,
 }) => {
   const [showSideBar, setShowSideBar] = useState(false);
-  const { Dark, setDark } = useHealthContext(); 
-  const navigate = useNavigate();
+  const { navigate, Dark, setDark } = useHealthContext();
   const location = useLocation();
 
   const toggleSideBar = () => setShowSideBar(!showSideBar);
 
   const toggleDarkMode = () => {
     setDark(!Dark);
+    const root = document.documentElement;
+    if (!Dark) root.classList.add("dark");
+    else root.classList.remove("dark");
   };
+
+  useEffect(() => {
+    // Initialize dark mode
+    if (Dark) document.documentElement.classList.add("dark");
+    else document.documentElement.classList.remove("dark");
+  }, [Dark]);
 
   const isHomePage = location.pathname === "/";
 
@@ -30,27 +38,51 @@ const Navbar = ({
       }`}
     >
       <div className="flex justify-between items-center px-5 py-4">
-        <div className="w-24 h-24 cursor-pointer" onClick={() => navigate("/")}>
+        {/* Logo */}
+        <div
+          className="w-24 h-24 cursor-pointer"
+          onClick={() => navigate("/dashboard")}
+        >
           <img src={assets.logo} alt="Logo" />
         </div>
 
+        {/* Desktop Links (Only show on home page) */}
         {isHomePage && (
           <div className="hidden lg:flex gap-6 items-center text-md font-medium">
-            <div onClick={() => navigate("/")} className="cursor-pointer">Home</div>
-            <div onClick={scrollToFeatures} className="cursor-pointer">Features</div>
-            <div onClick={scrollToHowItWorks} className="cursor-pointer">How it works</div>
-            <div onClick={scrollToAbout} className="cursor-pointer">About</div>
-            <div onClick={scrollToContact} className="cursor-pointer">Contact</div>
+            <div
+              onClick={() => navigate("/dashboard")}
+              className="cursor-pointer"
+            >
+              Home
+            </div>
+            <div onClick={scrollToFeatures} className="cursor-pointer">
+              Features
+            </div>
+            <div onClick={scrollToHowItWorks} className="cursor-pointer">
+              How it works
+            </div>
+            <div onClick={scrollToAbout} className="cursor-pointer">
+              About
+            </div>
+            <div onClick={scrollToContact} className="cursor-pointer">
+              Contact
+            </div>
           </div>
         )}
 
+        {/* Buttons + Dark Toggle + Mobile Menu */}
         <div className="flex items-center gap-5">
-          {/* ✅ Dark Mode Toggle is restored */}
           <div>
             {Dark ? (
-              <HiSun onClick={toggleDarkMode} className="w-6 h-6 cursor-pointer" />
+              <HiSun
+                onClick={toggleDarkMode}
+                className="w-6 h-6 cursor-pointer"
+              />
             ) : (
-              <HiMoon onClick={toggleDarkMode} className="w-6 h-6 cursor-pointer" />
+              <HiMoon
+                onClick={toggleDarkMode}
+                className="w-6 h-6 cursor-pointer"
+              />
             )}
           </div>
           <button
@@ -69,11 +101,71 @@ const Navbar = ({
           >
             Signup
           </button>
+
           <div className="lg:hidden cursor-pointer" onClick={toggleSideBar}>
-            {showSideBar ? <HiX className="w-6 h-6" /> : <HiOutlineMenu className="w-6 h-6" />}
+            {showSideBar ? (
+              <HiX className="w-6 h-6" />
+            ) : (
+              <HiOutlineMenu className="w-6 h-6" />
+            )}
           </div>
         </div>
       </div>
+
+      {/* Mobile Sidebar (Only show on home page) */}
+      {showSideBar && isHomePage && (
+        <div
+          className={`lg:hidden flex flex-col gap-5 p-5 border-t shadow-md ${
+            Dark ? "bg-black text-white" : "bg-white text-gray-900"
+          }`}
+        >
+          <div
+            onClick={() => {
+              navigate("/");
+              toggleSideBar();
+            }}
+            className="cursor-pointer"
+          >
+            Home
+          </div>
+          <div
+            onClick={() => {
+              scrollToFeatures();
+              toggleSideBar();
+            }}
+            className="cursor-pointer"
+          >
+            Features
+          </div>
+          <div
+            onClick={() => {
+              scrollToHowItWorks();
+              toggleSideBar();
+            }}
+            className="cursor-pointer"
+          >
+            How it works
+          </div>
+          <div
+            onClick={() => {
+              scrollToAbout();
+              toggleSideBar();
+            }}
+            className="cursor-pointer"
+          >
+            About
+          </div>
+          <div
+            onClick={() => {
+              scrollToContact();
+              toggleSideBar();
+            }}
+            className="cursor-pointer"
+          >
+            Contact
+          </div>
+        </div>
+      )}
     </nav>
   );
 };
