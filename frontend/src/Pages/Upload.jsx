@@ -4,10 +4,10 @@ import Navbar_III from "../Components/Navbar_III";
 import { useHealthContext } from "../Context/HealthContext";
 
 // --- SVG Icons ---
-const FiUploadCloud = () => (
+const FiUploadCloud = ({ Dark }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
-    className="w-10 h-10 text-gray-400"
+    className={`w-10 h-10 ${Dark ? "text-gray-300" : "text-gray-400"}`}
     fill="none"
     viewBox="0 0 24 24"
     stroke="currentColor"
@@ -21,10 +21,10 @@ const FiUploadCloud = () => (
   </svg>
 );
 
-const FiCheckCircle = () => (
+const FiCheckCircle = ({ Dark }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
-    className="w-5 h-5 mr-2 text-green-500"
+    className={`w-5 h-5 mr-2 ${Dark ? "text-green-300" : "text-green-500"}`}
     fill="none"
     viewBox="0 0 24 24"
     stroke="currentColor"
@@ -39,7 +39,7 @@ const FiCheckCircle = () => (
 );
 
 const Upload = () => {
-  const { addValidationRun } = useHealthContext();
+  const { addValidationRun, Dark } = useHealthContext();
 
   const [selectedFile, setSelectedFile] = useState(null);
   const [log, setLog] = useState([]);
@@ -117,8 +117,25 @@ const Upload = () => {
     }
   };
 
+  // Dynamic classes based on dark mode
+  const bgMain = Dark ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-900";
+  const cardBg = Dark
+    ? "bg-gray-800 border-gray-700"
+    : "bg-white border-gray-200";
+  const textSecondary = Dark ? "text-gray-300" : "text-gray-700";
+  const borderHover = Dark ? "hover:bg-gray-700" : "hover:bg-gray-100";
+  const logBg = Dark
+    ? "bg-gray-700 text-gray-100"
+    : "bg-gray-900/95 text-white";
+  const buttonBg = Dark
+    ? "bg-teal-600 hover:bg-teal-700 text-white"
+    : "bg-teal-500 hover:bg-teal-600 text-white";
+  const resetBtn = Dark
+    ? "bg-gray-700 hover:bg-gray-600 text-white"
+    : "bg-gray-200 hover:bg-gray-300 text-gray-700";
+
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className={`flex min-h-screen ${bgMain}`}>
       <Sidebar />
       <div className="flex-1">
         <Navbar_III />
@@ -129,18 +146,26 @@ const Upload = () => {
 
           {/* Upload Section */}
           {!isFinished && (
-            <div className="border border-gray-200 bg-white rounded-2xl p-5 sm:p-8 shadow-sm mb-6">
-              <h2 className="text-lg font-semibold mb-2">
+            <div
+              className={`border rounded-2xl p-5 sm:p-8 shadow-sm mb-6 ${cardBg}`}
+            >
+              <h2 className={`text-lg font-semibold mb-2 ${textSecondary}`}>
                 Upload Provider Data
               </h2>
               <label
                 htmlFor="file-upload"
-                className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-purple-300 rounded-xl bg-gray-50 hover:bg-gray-100 cursor-pointer text-center"
+                className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-xl ${
+                  Dark ? "border-purple-500" : "border-purple-300"
+                } ${
+                  Dark
+                    ? "bg-gray-700 hover:bg-gray-600"
+                    : "bg-gray-50 hover:bg-gray-100"
+                } cursor-pointer text-center`}
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
               >
-                <FiUploadCloud />
-                <span className="font-medium text-gray-700">
+                <FiUploadCloud Dark={Dark} />
+                <span className={`font-medium ${textSecondary}`}>
                   Click to upload or drag and drop
                 </span>
                 <span className="text-xs text-gray-400">
@@ -155,12 +180,12 @@ const Upload = () => {
                 />
               </label>
               {selectedFile && (
-                <p className="mt-2 text-gray-700">
+                <p className={`mt-2 ${textSecondary}`}>
                   Selected file: {selectedFile.name}
                 </p>
               )}
               <button
-                className="mt-4 bg-teal-500 hover:bg-teal-600 text-white py-2 px-6 rounded-lg"
+                className={`mt-4 py-2 px-6 rounded-lg ${buttonBg}`}
                 onClick={handleValidate}
                 disabled={isLoading || !selectedFile}
               >
@@ -171,11 +196,15 @@ const Upload = () => {
 
           {/* Live Log */}
           {isLoading && (
-            <div className="border border-gray-200 bg-white rounded-2xl p-5 sm:p-8 shadow-sm mb-6">
-              <h2 className="text-lg font-semibold mb-4">
+            <div
+              className={`border rounded-2xl p-5 sm:p-8 shadow-sm mb-6 ${cardBg}`}
+            >
+              <h2 className={`text-lg font-semibold mb-4 ${textSecondary}`}>
                 Live Validation Log
               </h2>
-              <div className="bg-gray-900 text-white font-mono text-xs rounded-lg p-4 h-64 overflow-y-auto">
+              <div
+                className={`font-mono text-xs rounded-lg p-4 h-64 overflow-y-auto ${logBg}`}
+              >
                 {log.map((entry, idx) => (
                   <p
                     key={idx}
@@ -188,23 +217,31 @@ const Upload = () => {
 
           {/* Results Section */}
           {isFinished && (
-            <div className="border border-gray-200 bg-white rounded-2xl p-5 sm:p-8 shadow-sm">
+            <div
+              className={`border rounded-2xl p-5 sm:p-8 shadow-sm ${cardBg}`}
+            >
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold flex items-center">
-                  <FiCheckCircle />
+                <h2 className={`text-lg font-semibold flex items-center`}>
+                  <FiCheckCircle Dark={Dark} />
                   Validation Complete
                 </h2>
                 <button
                   onClick={handleClear}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 px-4 rounded-lg"
+                  className={`py-2 px-4 rounded-lg ${resetBtn}`}
                 >
                   Start New Validation
                 </button>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
+                <table className={`min-w-full text-left text-sm`}>
                   <thead>
-                    <tr className="text-gray-600 border-b">
+                    <tr
+                      className={`${
+                        Dark
+                          ? "text-gray-300 border-gray-700"
+                          : "text-gray-600 border-gray-200"
+                      } border-b`}
+                    >
                       <th className="p-3">Provider Name</th>
                       <th className="p-3">NPI</th>
                       <th className="p-3 hidden md:table-cell">
@@ -215,7 +252,14 @@ const Upload = () => {
                   </thead>
                   <tbody>
                     {results.map((r, i) => (
-                      <tr key={i} className="border-b hover:bg-gray-50">
+                      <tr
+                        key={i}
+                        className={`border-b ${
+                          Dark
+                            ? "border-gray-700 hover:bg-gray-700"
+                            : "border-gray-200 hover:bg-gray-50"
+                        }`}
+                      >
                         <td className="py-3">
                           {r.final_profile?.provider_name ||
                             r.original_data.full_name}
@@ -230,9 +274,15 @@ const Upload = () => {
                           <span
                             className={`px-3 py-1 text-xs font-bold rounded-full ${
                               r.confidence_score >= 0.7
-                                ? "bg-green-100 text-green-800"
+                                ? Dark
+                                  ? "bg-green-600 text-green-100"
+                                  : "bg-green-100 text-green-800"
                                 : r.confidence_score >= 0.4
-                                ? "bg-yellow-100 text-yellow-800"
+                                ? Dark
+                                  ? "bg-yellow-600 text-yellow-100"
+                                  : "bg-yellow-100 text-yellow-800"
+                                : Dark
+                                ? "bg-red-600 text-red-100"
                                 : "bg-red-100 text-red-800"
                             }`}
                           >

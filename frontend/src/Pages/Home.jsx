@@ -30,15 +30,13 @@ const Home = () => {
   const scrollToContact = () =>
     contactRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
-  // Apply CSS variables to Home wrapper
-  const homeStyle = {
-    backgroundColor: Dark ? "#020817" : "#f9f9f9",
-    color: Dark ? "#e0e0e0" : "#000000",
-  };
-
   return (
-    <div style={homeStyle}>
-      {/* Navbar with scroll functions */}
+    <div
+      className={`${
+        Dark ? "bg-gray-900 text-gray-200" : "bg-gray-100 text-gray-900"
+      } transition-colors duration-500`}
+    >
+      {/* Navbar */}
       <Navbar
         scrollToFeatures={scrollToFeatures}
         scrollToHowItWorks={scrollToHowItWorks}
@@ -47,55 +45,60 @@ const Home = () => {
       />
 
       {/* Hero Section */}
-      <div className="flex flex-col-reverse md:flex-row pt-30">
-        <div className="md:w-[50%] flex flex-col pl-15 justify-center gap-2 mb-10 p-5 ">
-          <div className="text-xl lg:text-3xl font-[Poppins]">
+      <div className="flex flex-col-reverse md:flex-row items-center pt-24 md:pt-32 px-5 md:px-20 gap-10 md:gap-0 mt-25">
+        {/* Text Content */}
+        <div className="md:w-1/2 flex flex-col gap-4 md:gap-6">
+          <h1 className="text-2xl md:text-4xl font-bold font-[Poppins]">
             AI-Powered Healthcare Provider Validation
-          </div>
-          <div className="text-md lg:text-xl">
+          </h1>
+          <p className="text-md md:text-xl text-gray-400">
             Reduce manual verification time from hours to minutes
-          </div>
-          <div className="text-xs md:text-sm text-gray-400">
+          </p>
+          <p className="text-sm md:text-base text-gray-400">
             Automate provider data validation with AI to save time and reduce
             errors. Gain real-time insights into your provider network, track
             confidence scores, and quickly identify inconsistencies.
-          </div>
+          </p>
           <button
             onClick={() => navigate("/signUp")}
-            className={`px-5 py-3 mt-3 rounded-2xl w-1/2 cursor-pointer ${
-              Dark ? "bg-blue-950" : "bg-blue-900 text-white"
-            }`}
+            className=" px-5 py-3 mt-3 rounded-2xl bg-blue-950 text-white  w-1/2"
           >
-            SignUp to Dashboard
+            Sign in to Dashboard
           </button>
         </div>
-        <div className="md:w-[50%]">
-          <img src={assets.Hero} alt="Hero" />
-          <hr className="md:hidden" />
+
+        {/* Hero Image */}
+        <div className="md:w-1/2 flex justify-center">
+          <img src={assets.Hero} alt="Hero" className="w-full max-w-lg" />
         </div>
       </div>
 
-      {/* Sections */}
-      <div ref={featuresRef}>
+      {/* Features Section */}
+      <div ref={featuresRef} className="mt-20">
         <Features />
       </div>
-      <div ref={howItWorksRef}>
+
+      {/* How It Works Section */}
+      <div ref={howItWorksRef} className="mt-20">
         <HowItWorks />
       </div>
-      <div ref={aboutRef}>
+
+      {/* About Section */}
+      <div ref={aboutRef} className="mt-20">
         <About />
       </div>
+
+      {/* Contact Section */}
       <div
         ref={contactRef}
-        className="flex items-center justify-center m-5"
-        style={{
-          backgroundColor: "var(--card-bg-color)",
-          color: "var(--text-color)",
-        }}
+        className={`mt-20 py-10 px-5 md:px-20 rounded-xl ${
+          Dark ? "bg-gray-800 text-gray-200" : "bg-white text-gray-900"
+        }`}
       >
         <Contact />
       </div>
 
+      {/* Footer */}
       <Footer />
     </div>
   );

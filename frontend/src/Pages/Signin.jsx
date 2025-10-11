@@ -2,11 +2,11 @@ import React, { useState, useEffect } from "react";
 import { useHealthContext } from "../Context/HealthContext";
 import assets from "../assets/assets";
 import Navbar from "../Components/Navbar";
-import { useNavigate } from "react-router-dom"; // ✅ 1. Import useNavigate
+import { useNavigate } from "react-router-dom";
 
 const Signin = () => {
-  const { Dark } = useHealthContext(); // ✅ 2. Removed 'navigate' from here
-  const navigate = useNavigate(); // ✅ 3. Get the navigate function directly
+  const { Dark } = useHealthContext();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -23,26 +23,24 @@ const Signin = () => {
 
   return (
     <div
-      className={`min-h-screen transition-colors duration-500 pt-20 ${
-        Dark ? "bg-[#020817]" : "bg-gray-100"
+      className={`flex flex-col items-center justify-center min-h-screen transition-colors duration-500 ${
+        Dark ? "bg-gray-900" : "bg-gray-50"
       }`}
     >
       <Navbar />
 
-      <div className="flex items-center justify-center px-4 pt-20">
+      <div className="flex items-center justify-center px-4 w-full">
         <div
-          className={`max-w-md w-full p-8 rounded-2xl shadow-lg transition-colors duration-500 ${
-            Dark ? "bg-gray-800 text-gray-200" : "bg-white text-gray-900"
+          className={`w-full max-w-md p-8 rounded-2xl shadow-lg transition-colors duration-500 ${
+            Dark
+              ? "bg-gray-800 text-gray-200 border border-gray-700"
+              : "bg-white text-gray-900 border border-gray-200"
           }`}
         >
-          {/* Logo */}
-          <div className="flex justify-center mb-6">
-            <img src={assets.logo} alt="Logo" className="w-24 h-24" />
-          </div>
-
           <h2 className="text-2xl font-bold text-center mb-6">Login</h2>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            {/* Email */}
             <div>
               <label
                 className={`block text-sm font-medium mb-1 transition-colors ${
@@ -57,14 +55,15 @@ const Signin = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="you@example.com"
-                className={`w-full border px-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-300 ${
+                className={`w-full border px-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 transition-colors duration-300 ${
                   Dark
                     ? "bg-gray-900 text-gray-200 border-gray-700 placeholder-gray-500"
-                    : "bg-white text-gray-900 border-gray-300"
+                    : "bg-white text-gray-900 border-gray-200 placeholder-gray-400"
                 }`}
               />
             </div>
 
+            {/* Password */}
             <div>
               <label
                 className={`block text-sm font-medium mb-1 transition-colors ${
@@ -79,22 +78,24 @@ const Signin = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 placeholder="Enter your password"
-                className={`w-full border px-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-300 ${
+                className={`w-full border px-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 transition-colors duration-300 ${
                   Dark
                     ? "bg-gray-900 text-gray-200 border-gray-700 placeholder-gray-500"
-                    : "bg-white text-gray-900 border-gray-300"
+                    : "bg-white text-gray-900 border-gray-200 placeholder-gray-400"
                 }`}
               />
             </div>
 
+            {/* Submit Button */}
             <button
               type="submit"
-              className="mt-4 w-full py-2 px-4 rounded-2xl bg-blue-900 text-white font-semibold hover:bg-blue-800 transition"
+              className="mt-4 w-full py-3 rounded-2xl bg-blue-800  text-white font-semibold hover:bg-blue-900 active:scale-95 transition-transform duration-150"
             >
               Login
             </button>
           </form>
 
+          {/* Sign Up Link */}
           <p
             className={`text-center text-sm mt-4 transition-colors duration-300 ${
               Dark ? "text-gray-400" : "text-gray-500"
@@ -103,7 +104,7 @@ const Signin = () => {
             Don’t have an account?{" "}
             <span
               onClick={() => navigate("/signUp")}
-              className="text-blue-600 cursor-pointer hover:underline"
+              className="text-blue-500 cursor-pointer hover:underline hover:text-blue-400 transition-colors"
             >
               Sign Up
             </span>
