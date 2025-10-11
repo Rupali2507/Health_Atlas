@@ -1,6 +1,6 @@
 # Health Atlas - AI Provider Validator
 
-This repository contains the backend components for the EY Techathon 6.0 "Health Atlas" project. The work includes scripts for generating realistic healthcare provider datasets and a comprehensive Python library of tools for an AI agent to use for data validation.
+This repository contains the backend components for the "Health Atlas" project. The work includes scripts for generating realistic healthcare provider datasets and a comprehensive Python library of tools for an AI agent to use for data validation.
 
 This document provides a complete guide to setting up the environment, installing dependencies, configuring API keys, and running all provided scripts.
 
@@ -50,11 +50,11 @@ cd Health_Atlas```
 ### Step 2: Create the Conda Environment
 This project uses a specific Python version for compatibility. Use the following command to create and activate the Conda environment.
 ```bash
-# Create the environment named 'ey-hackathon' with Python 3.11
-conda create --name ey-hackathon python=3.11 -y
+# Create the environment named 'hackathon' with Python 3.11
+conda create --name hackathon python=3.11 -y
 
 # Activate the environment (you must do this every time you work on the project)
-conda activate ey-hackathon
+conda activate hackathon
 Step 3: Install Python Dependencies
 
 All required Python libraries are listed in backend/requirements.txt.
