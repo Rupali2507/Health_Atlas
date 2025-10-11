@@ -6,6 +6,8 @@ langchain-core
 langgraph
 langchain-groq
 python-dotenv
+python-multipart
+
 
 # Data Tools
 requests
