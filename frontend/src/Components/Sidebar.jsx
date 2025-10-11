@@ -8,9 +8,11 @@ import {
   HiX,
 } from "react-icons/hi";
 import { useHealthContext } from "../Context/HealthContext";
+import { useNavigate } from "react-router-dom"; 
 
 const Sidebar = () => {
-  const { navigate } = useHealthContext();
+  const { Dark, setDark } = useHealthContext(); 
+  const navigate = useNavigate(); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);

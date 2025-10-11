@@ -2,9 +2,11 @@ import React, { useState, useEffect } from "react";
 import { useHealthContext } from "../Context/HealthContext";
 import assets from "../assets/assets";
 import Navbar from "../Components/Navbar";
+import { useNavigate } from "react-router-dom"; // ✅ 1. Import useNavigate
 
 const Signin = () => {
-  const { navigate, Dark } = useHealthContext();
+  const { Dark } = useHealthContext(); // ✅ 2. Removed 'navigate' from here
+  const navigate = useNavigate(); // ✅ 3. Get the navigate function directly
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 

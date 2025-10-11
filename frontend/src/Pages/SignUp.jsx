@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { useHealthContext } from "../Context/HealthContext";
 import Navbar from "../Components/Navbar";
+import { useNavigate } from "react-router-dom"; // ✅ 1. Import useNavigate
 
 const SignUp = () => {
-  const { navigate, Dark } = useHealthContext();
+  const { Dark } = useHealthContext(); // ✅ 2. Removed 'navigate' from here
+  const navigate = useNavigate(); // ✅ 3. Get the navigate function directly
   const [formData, setFormData] = useState({
     name: "",
     email: "",
