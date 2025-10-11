@@ -26,3 +26,6 @@ fpdf2
 
 # API Clients & Geocoding
 pgeocode==0.5.0
+
+#deployment
+gunicorn
