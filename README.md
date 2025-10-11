@@ -3,7 +3,6 @@
 **Health Atlas** is an intelligent, full-stack web application designed to solve the critical problem of inaccurate and outdated healthcare provider data.
 It leverages a **multi-agent AI system** to autonomously verify, correct, and enrich provider information from various sources, providing a **reliable source of truth** for the healthcare industry.
 
-This project was developed for **EY Techathon 6.0**, addressing **Problem Statement 6**.
 
 ---
 
