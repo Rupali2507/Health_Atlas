@@ -1,4 +1,4 @@
-# 🩺 Health Atlas: Autonomous Provider Data Validation Service (Basic Version)
+# 🩺 Health Atlas: Autonomous Provider Data Validation Service 
 
 **Health Atlas** is an intelligent, full-stack web application designed to address one of the healthcare industry's most persistent challenges — **inaccurate and outdated provider data**.  
 It leverages a **multi-agent AI system** that autonomously verifies, corrects, and enriches provider information from diverse sources, producing a trusted, continuously improving data repository.
