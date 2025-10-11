@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useHealthContext } from "../Context/HealthContext"; // Import the context hook
 
 // --- SVG Icons (Self-Contained) ---
 // These replace the 'react-icons' dependency to fix the error.
@@ -26,11 +27,15 @@ const Upload = () => {
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
+  
+  // Get the function to save results from the context
+  const { addValidationRun } = useHealthContext();
 
   // --- FILE HANDLING ---
   const handleFileChange = (e) => setSelectedFile(e.target.files[0]);
   const handleDrop = (e) => { e.preventDefault(); setSelectedFile(e.dataTransfer.files[0]); };
   const handleDragOver = (e) => e.preventDefault();
+  
   const handleClear = () => {
     setSelectedFile(null);
     setLog([]);
@@ -46,7 +51,10 @@ const Upload = () => {
     setIsLoading(true);
     setIsFinished(false);
     setLog(["Starting validation process..."]);
-    setResults([]);
+    
+    // Use a temporary variable to collect results for this run
+    let currentRunResults = [];
+    setResults([]); // Clear previous results from display
 
     const formData = new FormData();
     formData.append("file", selectedFile);
@@ -62,11 +70,7 @@ const Upload = () => {
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) {
-          setIsLoading(false);
-          setIsFinished(true);
-          break;
-        }
+        if (done) break;
 
         const chunk = decoder.decode(value, { stream: true });
         const lines = chunk.split("\n\n");
@@ -78,12 +82,17 @@ const Upload = () => {
               try {
                 const data = JSON.parse(dataStr);
                 if (data.type === 'log') {
-                  setLog((prevLog) => [...prevLog, data.content]);
+                  setLog((prev) => [...prev, data.content]);
                 } else if (data.type === 'result') {
-                  setResults((prevResults) => [...prevResults, data.data]);
+                  // Add to both the temporary list and the display state
+                  currentRunResults.push(data.data);
+                  setResults((prev) => [...prev, data.data]);
                 } else if (data.type === 'close') {
+                  // When the backend signals it's done...
                   setIsLoading(false);
                   setIsFinished(true);
+                  // Save the completed run to our shared context
+                  addValidationRun({ fileName: selectedFile.name, results: currentRunResults });
                 }
               } catch (e) {
                 // Ignore parsing errors for potentially incomplete chunks
@@ -94,82 +103,85 @@ const Upload = () => {
       }
     } catch (error) {
       console.error("Error during validation:", error);
-      setLog((prevLog) => [...prevLog, `ERROR: Could not connect to the backend. Is it running? Details: ${error.message}`]);
+      setLog((prev) => [...prev, `ERROR: Could not connect to the backend. Is it running? Details: ${error.message}`]);
       setIsLoading(false);
     }
   };
 
   // --- UI RENDERING ---
   return (
-    // Removed Sidebar and Navbar components to make this file self-contained
+    // Removed Sidebar and Navbar components to make this file self-contained for now
     <div className="flex min-h-screen bg-gray-50 font-[Inter]">
       <div className="flex-1 p-4 sm:p-6 lg:p-8">
         <h1 className="font-bold text-3xl text-gray-800 mb-6">
           Upload & Validate Provider Data
         </h1>
 
-        {/* --- UPLOAD VIEW --- */}
-        {!isFinished && (
-          <div className="border border-gray-200 bg-white rounded-2xl p-5 sm:p-8 shadow-sm mb-8">
-            <h2 className="text-xl font-semibold mb-1 text-gray-800">Upload Provider File</h2>
-            <p className="text-gray-500 text-sm mb-6">Drag and drop your provider files (CSV or PDF) here.</p>
-            <label htmlFor="file-upload" className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-purple-300 rounded-xl bg-gray-50 hover:bg-gray-100 transition cursor-pointer text-center" onDrop={handleDrop} onDragOver={handleDragOver}>
-              <FiUploadCloud />
-              <span className="font-medium text-gray-700 text-base mt-2">Click to upload or drag and drop</span>
-              <span className="text-xs text-gray-400 mt-1">CSV or PDF (max. 50MB)</span>
-              <input id="file-upload" type="file" accept=".csv,.pdf" className="hidden" onChange={handleFileChange} />
-            </label>
-            {selectedFile && (
-              <div className="mt-4 flex items-center justify-between">
-                <p className="text-sm text-gray-700">Selected file: <span className="font-medium">{selectedFile.name}</span></p>
-                <button onClick={() => setSelectedFile(null)} className="text-red-500 hover:text-red-600"><FiX /></button>
-              </div>
-            )}
-            <button className="mt-6 bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2.5 px-6 rounded-lg transition w-full sm:w-auto disabled:bg-gray-400" onClick={handleValidate} disabled={!selectedFile || isLoading}>
-              {isLoading ? 'Validating...' : 'Start Validation Cycle'}
-            </button>
-          </div>
-        )}
-        
-        {/* --- LOG & RESULTS VIEW --- */}
-        <div>
-          {/* Live Log Display */}
-          {isLoading && (
-            <div className="border border-gray-200 bg-white rounded-2xl p-5 sm:p-8 shadow-sm mb-8">
-              <h2 className="text-xl font-semibold mb-4 flex items-center text-gray-800"><FiZap />Live Validation Log</h2>
-              <div className="bg-gray-900 text-white font-mono text-xs rounded-lg p-4 h-64 overflow-y-auto">
-                {log.map((entry, index) => <p key={index} className="whitespace-pre-wrap">{`> ${entry}`}</p>)}
-              </div>
+          {/* UPLOAD VIEW - Only show if not finished */}
+          {!isFinished && (
+            <div className="border border-gray-200 bg-white rounded-2xl p-5 sm:p-8 shadow-sm">
+              <h2 className="text-lg sm:text-xl font-semibold mb-1">
+                Upload Provider Data
+              </h2>
+              <p className="text-gray-500 text-sm sm:text-base mb-6">
+                Drag and drop your provider files (CSV or PDF) here.
+              </p>
+              <label htmlFor="file-upload" className="flex flex-col items-center justify-center w-full h-40 sm:h-48 border-2 border-dashed border-purple-300 rounded-xl bg-gray-50 hover:bg-gray-100 transition cursor-pointer text-center" onDrop={handleDrop} onDragOver={handleDragOver}>
+                <FiUploadCloud />
+                <span className="font-medium text-gray-700 text-sm sm:text-base">Click to upload or drag and drop</span>
+                <span className="text-xs text-gray-400">CSV or PDF (max. 50MB)</span>
+                <input id="file-upload" type="file" accept=".csv,.pdf" className="hidden" onChange={handleFileChange} />
+              </label>
+              {selectedFile && (
+                <div className="mt-4 text-sm text-gray-700">
+                  Selected file: <span className="font-medium">{selectedFile.name}</span>
+                </div>
+              )}
+              <button className="mt-6 bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2.5 px-6 rounded-lg transition w-full sm:w-auto disabled:bg-gray-400" onClick={handleValidate} disabled={isLoading || !selectedFile}>
+                {isLoading ? "Validating..." : "Start Validation Cycle"}
+              </button>
             </div>
           )}
-          
-          {/* Final Results View */}
+
+          {/* LIVE LOG - Only show when loading */}
+          {isLoading && (
+             <div className="border border-gray-200 bg-white rounded-2xl p-5 sm:p-8 shadow-sm mt-8">
+               <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center"><FiZap />Live Validation Log</h2>
+               <div className="bg-gray-900 text-white font-mono text-xs rounded-lg p-4 h-64 overflow-y-auto">
+                 {log.map((entry, index) => <p key={index} className="whitespace-pre-wrap">{`> ${entry}`}</p>)}
+               </div>
+             </div>
+          )}
+
+          {/* RESULTS VIEW - Only show when finished */}
           {isFinished && (
-            <div className="border border-gray-200 bg-white rounded-2xl p-5 sm:p-8 shadow-sm">
+            <div className="border border-gray-200 bg-white rounded-2xl p-5 sm:p-8 shadow-sm mt-8">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-semibold flex items-center text-gray-800"><FiCheckCircle />Validation Complete</h2>
+                <h2 className="text-lg sm:text-xl font-semibold flex items-center"><FiCheckCircle />Validation Complete</h2>
                 <button onClick={handleClear} className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg transition text-sm">
                   Start New Validation
                 </button>
               </div>
-              <p className="text-gray-500 text-sm mb-6">Review the validation results and confidence scores below.</p>
+              <p className="text-gray-500 text-sm sm:text-base mb-6">
+                Review the validation results and confidence scores below.
+              </p>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
-                  <thead className="border-b bg-gray-50">
-                    <tr className="text-gray-600">
-                      <th className="p-3 font-semibold">Provider Name</th>
-                      <th className="p-3 font-semibold">NPI</th>
-                      <th className="p-3 font-semibold hidden md:table-cell">Verified Address</th>
-                      <th className="p-3 font-semibold">Confidence Score</th>
+                  <thead>
+                    <tr className="text-gray-600 border-b">
+                      <th className="p-3">Provider Name</th>
+                      <th className="p-3">NPI</th>
+                      <th className="p-3 hidden md:table-cell">Verified Address</th>
+                      <th className="p-3">Confidence Score</th>
                     </tr>
                   </thead>
                   <tbody>
                     {results.map((result, index) => (
                       <tr key={index} className="border-b hover:bg-gray-50 transition">
-                        <td className="p-3 text-gray-800 font-medium">{result.final_profile?.provider_name || result.original_data.full_name}</td>
-                        <td className="p-3 text-gray-700 font-mono">{result.final_profile?.npi || 'N/A'}</td>
-                        <td className="p-3 text-gray-700 hidden md:table-cell">{result.final_profile?.address || 'N/A'}</td>
-                        <td className="p-3">
+                        <td className="py-3 text-gray-800 font-medium">{result.final_profile?.provider_name || result.original_data.full_name}</td>
+                        <td className="py-3 text-gray-700">{result.final_profile?.npi || 'N/A'}</td>
+                        <td className="py-3 text-gray-700 hidden md:table-cell">{result.final_profile?.address || 'N/A'}</td>
+                        <td className="py-3">
                           <span className={`px-3 py-1 text-xs font-bold rounded-full ${result.confidence_score >= 0.7 ? 'bg-green-100 text-green-800' : result.confidence_score >= 0.4 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
                             {`${(result.confidence_score * 100).toFixed(0)}%`}
                           </span>
@@ -181,7 +193,6 @@ const Upload = () => {
               </div>
             </div>
           )}
-        </div>
       </div>
     </div>
   );
