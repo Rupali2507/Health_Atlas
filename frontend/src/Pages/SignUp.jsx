@@ -55,7 +55,7 @@ const SignUp = () => {
       console.error(err);
       alert(err.message || "Error signing up");
     } finally {
-      setLoading(false);
+      // setLoading(false);
     }
   };
 
