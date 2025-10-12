@@ -73,10 +73,13 @@ const Upload = () => {
     formData.append("file", selectedFile);
 
     try {
-      const response = await fetch("https://health-atlas-backend.onrender.com/validate-file", {
-        method: "POST",
-        body: formData,
-      });
+      const response = await fetch(
+        "https://health-atlas-backend.onrender.com/validate-file",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -137,7 +140,7 @@ const Upload = () => {
   return (
     <div className={`flex min-h-screen ${bgMain}`}>
       <Sidebar />
-      <div className="flex-1">
+      <div className="flex-1 ml-[20vw]">
         <Navbar_III />
         <div className="p-6">
           <h1 className="font-bold text-3xl mb-6">

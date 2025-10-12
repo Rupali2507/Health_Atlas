@@ -17,7 +17,7 @@ const Sidebar = () => {
   const hoverBg = Dark ? "hover:bg-gray-700" : "hover:bg-gray-100";
 
   return (
-    <>
+    <div className="fixed w-full">
       {/* Toggle Button for Mobile */}
       <div
         className="lg:hidden cursor-pointer m-4 z-50 mt-10"
@@ -76,7 +76,7 @@ const Sidebar = () => {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 
