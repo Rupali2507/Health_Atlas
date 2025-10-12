@@ -75,6 +75,9 @@ const Upload = () => {
     const formData = new FormData();
     formData.append("file", selectedFile);
 
+    console.log("Attempting to connect to backend at:", `${API_URL}/validate-file`);
+
+
     try {
       const response = await fetch(`${API_URL}/validate-file`,  {
         method: "POST",
