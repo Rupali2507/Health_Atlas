@@ -17,7 +17,7 @@ const ProviderDetail = () => {
         }`}
       >
         <Sidebar />
-        <div className="flex-1 ">
+        <div className="flex-1 lg:ml-[20vw]">
           <Navbar_III />
           <div className="p-6 text-center">
             <h1 className="text-2xl font-bold mt-10">No Provider Selected</h1>
@@ -74,80 +74,84 @@ const ProviderDetail = () => {
       }`}
     >
       <Sidebar />
-      <div className="flex-1 lg:ml-[20vw]">
+      <div className="flex-1 ">
         <Navbar_III />
-        <div className="p-6">
-          <button
-            onClick={() => navigate(-1)}
-            className={
-              Dark
-                ? "flex items-center text-gray-300 hover:text-white font-medium mb-6"
-                : "flex items-center text-gray-600 hover:text-gray-900 font-medium mb-6"
-            }
-          >
-            <ChevronLeft size={20} className="mr-1" />
-            Back to List
-          </button>
+        <div className="lg:ml-[20vw]">
+          <div className="p-6">
+            <button
+              onClick={() => navigate(-1)}
+              className={
+                Dark
+                  ? "flex items-center text-gray-300 hover:text-white font-medium mb-6"
+                  : "flex items-center text-gray-600 hover:text-gray-900 font-medium mb-6"
+              }
+            >
+              <ChevronLeft size={20} className="mr-1" />
+              Back to List
+            </button>
 
-          <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-6">
-            <div>
-              <h1 className="text-3xl font-bold font-[Inter]">
-                {selectedProvider.final_profile?.provider_name ||
-                  selectedProvider.original_data.full_name}
-              </h1>
-              <p className={Dark ? "text-gray-300 mt-1" : "text-gray-500 mt-1"}>
-                NPI: {selectedProvider.final_profile?.npi || "N/A"}
-              </p>
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-6">
+              <div>
+                <h1 className="text-3xl font-bold font-[Inter]">
+                  {selectedProvider.final_profile?.provider_name ||
+                    selectedProvider.original_data.full_name}
+                </h1>
+                <p
+                  className={Dark ? "text-gray-300 mt-1" : "text-gray-500 mt-1"}
+                >
+                  NPI: {selectedProvider.final_profile?.npi || "N/A"}
+                </p>
+              </div>
+              <div className="mt-4 sm:mt-0">
+                <span className="text-sm font-semibold mr-2">
+                  Confidence Score:
+                </span>
+                <span
+                  className={`px-4 py-2 text-sm font-bold rounded-full ${
+                    score >= 0.7
+                      ? Dark
+                        ? "bg-green-600 text-green-100"
+                        : "bg-green-100 text-green-800"
+                      : score >= 0.4
+                      ? Dark
+                        ? "bg-yellow-600 text-yellow-100"
+                        : "bg-yellow-100 text-yellow-800"
+                      : Dark
+                      ? "bg-red-600 text-red-100"
+                      : "bg-red-100 text-red-800"
+                  }`}
+                >
+                  {(score * 100).toFixed(0)}%
+                </span>
+              </div>
             </div>
-            <div className="mt-4 sm:mt-0">
-              <span className="text-sm font-semibold mr-2">
-                Confidence Score:
-              </span>
-              <span
-                className={`px-4 py-2 text-sm font-bold rounded-full ${
-                  score >= 0.7
-                    ? Dark
-                      ? "bg-green-600 text-green-100"
-                      : "bg-green-100 text-green-800"
-                    : score >= 0.4
-                    ? Dark
-                      ? "bg-yellow-600 text-yellow-100"
-                      : "bg-yellow-100 text-yellow-800"
-                    : Dark
-                    ? "bg-red-600 text-red-100"
-                    : "bg-red-100 text-red-800"
-                }`}
-              >
-                {(score * 100).toFixed(0)}%
-              </span>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {renderDetailSection(
-              "Final Verified Profile",
-              selectedProvider.final_profile
-            )}
-            {renderDetailSection(
-              "NPI Registry Data",
-              selectedProvider.final_profile?.npi_data
-            )}
-            {renderDetailSection(
-              "Address Validation",
-              selectedProvider.final_profile?.address_validation
-            )}
-            {renderDetailSection(
-              "Enrichment Data",
-              selectedProvider.final_profile?.enrichment_data
-            )}
-            {renderDetailSection(
-              "Quality Assurance Flags",
-              selectedProvider.qa_flags
-            )}
-            {renderDetailSection(
-              "Original Input Data",
-              selectedProvider.original_data
-            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {renderDetailSection(
+                "Final Verified Profile",
+                selectedProvider.final_profile
+              )}
+              {renderDetailSection(
+                "NPI Registry Data",
+                selectedProvider.final_profile?.npi_data
+              )}
+              {renderDetailSection(
+                "Address Validation",
+                selectedProvider.final_profile?.address_validation
+              )}
+              {renderDetailSection(
+                "Enrichment Data",
+                selectedProvider.final_profile?.enrichment_data
+              )}
+              {renderDetailSection(
+                "Quality Assurance Flags",
+                selectedProvider.qa_flags
+              )}
+              {renderDetailSection(
+                "Original Input Data",
+                selectedProvider.original_data
+              )}
+            </div>
           </div>
         </div>
       </div>
