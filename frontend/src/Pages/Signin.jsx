@@ -2,11 +2,11 @@ import React, { useState, useEffect } from "react";
 import { useHealthContext } from "../Context/HealthContext";
 import assets from "../assets/assets";
 import Navbar from "../Components/Navbar";
-import { useNavigate } from "react-router-dom"; // ✅ 1. Import useNavigate
+import { useNavigate } from "react-router-dom";
 
 const Signin = () => {
-  const { Dark } = useHealthContext(); // ✅ 2. Removed 'navigate' from here
-  const navigate = useNavigate(); // ✅ 3. Get the navigate function directly
+  const { Dark } = useHealthContext();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -18,11 +18,14 @@ const Signin = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch("http://localhost:8080/api/auth/signin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+      const response = await fetch(
+        "https://health-atlas-fjm4.onrender.com/api/auth/signin",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        }
+      );
 
       if (!response.ok) throw new Error("Login failed");
 
@@ -117,7 +120,7 @@ const Signin = () => {
               Dark ? "text-gray-400" : "text-gray-500"
             }`}
           >
-            Don’t have an account?{" "}
+            Don't have an account?{" "}
             <span
               onClick={() => navigate("/signUp")}
               className="text-blue-500 cursor-pointer hover:underline hover:text-blue-400 transition-colors"
