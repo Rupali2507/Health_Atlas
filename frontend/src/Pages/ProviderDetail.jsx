@@ -17,7 +17,7 @@ const ProviderDetail = () => {
         }`}
       >
         <Sidebar />
-        <div className="flex-1 ml-[20vw]">
+        <div className="flex-1 lg:ml-[20vw]">
           <Navbar_III />
           <div className="p-6 text-center">
             <h1 className="text-2xl font-bold mt-10">No Provider Selected</h1>
