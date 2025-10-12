@@ -20,7 +20,7 @@ protected void configure(HttpSecurity http) throws Exception {
     http.cors().and()
         .csrf().disable()
         .authorizeRequests()
-        .requestMatchers("/api/auth/signup", "/api/auth/signin").permitAll()  // allow public access to signup/signin
+        .requestMatchers("https://health-atlas.vercel.app").permitAll()  // allow public access to signup/signin
         .anyRequest().authenticated();
 }
 
