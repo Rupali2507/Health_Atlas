@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import Sidebar from "../Components/Sidebar";
 import Navbar_III from "../Components/Navbar_III";
 import { useHealthContext } from "../Context/HealthContext";
@@ -40,6 +40,7 @@ const FiCheckCircle = ({ Dark }) => (
 
 const Upload = () => {
   const { addValidationRun, Dark } = useHealthContext();
+  const fileInputRef = useRef(null);
 
   const [selectedFile, setSelectedFile] = useState(null);
   const [log, setLog] = useState([]);
@@ -47,12 +48,23 @@ const Upload = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
 
-  const handleFileChange = (e) => setSelectedFile(e.target.files[0]);
+  // --- File Handlers ---
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) setSelectedFile(e.target.files[0]);
+  };
+
   const handleDrop = (e) => {
     e.preventDefault();
-    setSelectedFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files[0])
+      setSelectedFile(e.dataTransfer.files[0]);
   };
+
   const handleDragOver = (e) => e.preventDefault();
+
+  const handleLabelClick = () => {
+    fileInputRef.current.click();
+  };
+
   const handleClear = () => {
     setSelectedFile(null);
     setLog([]);
@@ -75,72 +87,45 @@ const Upload = () => {
     try {
       const response = await fetch(
         "https://health-atlas-backend.onrender.com/validate-file",
-        {
-          method: "POST",
-          body: formData,
-        }
+        { method: "POST", body: formData }
       );
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n\n");
-
-        for (const line of lines) {
-          if (line.startsWith("data:")) {
-            const dataStr = line.substring(5);
-            if (dataStr) {
-              try {
-                const data = JSON.parse(dataStr);
-                if (data.type === "log")
-                  setLog((prev) => [...prev, data.content]);
-                else if (data.type === "result") {
-                  currentRunResults.push(data.data);
-                  setResults((prev) => [...prev, data.data]);
-                } else if (data.type === "close") {
-                  setIsLoading(false);
-                  setIsFinished(true);
-                  addValidationRun({
-                    fileName: selectedFile.name,
-                    results: currentRunResults,
-                  });
-                }
-              } catch {}
-            }
-          }
-        }
-      }
+      const data = await response.json(); // simpler fetch for debugging
+      console.log(data);
+      // TODO: handle data log/results if backend returns proper structure
+      setIsLoading(false);
+      setIsFinished(true);
+      addValidationRun({
+        fileName: selectedFile.name,
+        results: data.results || [],
+      });
+      setResults(data.results || []);
     } catch (err) {
       setLog((prev) => [...prev, `ERROR: ${err.message}`]);
       setIsLoading(false);
     }
   };
 
-  // Dynamic classes based on dark mode
+  // --- Styles ---
   const bgMain = Dark ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-900";
   const cardBg = Dark
     ? "bg-gray-800 border-gray-700"
     : "bg-white border-gray-200";
   const textSecondary = Dark ? "text-gray-300" : "text-gray-700";
-  const borderHover = Dark ? "hover:bg-gray-700" : "hover:bg-gray-100";
-  const logBg = Dark
-    ? "bg-gray-700 text-gray-100"
-    : "bg-gray-900/95 text-white";
   const buttonBg = Dark
     ? "bg-teal-600 hover:bg-teal-700 text-white"
     : "bg-teal-500 hover:bg-teal-600 text-white";
   const resetBtn = Dark
     ? "bg-gray-700 hover:bg-gray-600 text-white"
     : "bg-gray-200 hover:bg-gray-300 text-gray-700";
+  const logBg = Dark
+    ? "bg-gray-700 text-gray-100"
+    : "bg-gray-900/95 text-white";
 
   return (
     <div className={`flex min-h-screen ${bgMain}`}>
       <Sidebar />
-      <div className="flex-1 ml-[20vw]">
+      <div className="flex-1">
         <Navbar_III />
         <div className="p-6">
           <h1 className="font-bold text-3xl mb-6">
@@ -155,15 +140,14 @@ const Upload = () => {
               <h2 className={`text-lg font-semibold mb-2 ${textSecondary}`}>
                 Upload Provider Data
               </h2>
-              <label
-                htmlFor="file-upload"
-                className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-xl ${
-                  Dark ? "border-purple-500" : "border-purple-300"
-                } ${
+
+              <div
+                className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-xl cursor-pointer ${
                   Dark
-                    ? "bg-gray-700 hover:bg-gray-600"
-                    : "bg-gray-50 hover:bg-gray-100"
-                } cursor-pointer text-center`}
+                    ? "border-purple-500 bg-gray-700 hover:bg-gray-600"
+                    : "border-purple-300 bg-gray-50 hover:bg-gray-100"
+                }`}
+                onClick={handleLabelClick}
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
               >
@@ -174,19 +158,23 @@ const Upload = () => {
                 <span className="text-xs text-gray-400">
                   CSV or PDF (max. 50MB)
                 </span>
-                <input
-                  id="file-upload"
-                  type="file"
-                  accept=".csv,.pdf"
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
-              </label>
+              </div>
+
+              <input
+                id="file-upload"
+                type="file"
+                accept=".csv,.pdf"
+                className="hidden"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+              />
+
               {selectedFile && (
                 <p className={`mt-2 ${textSecondary}`}>
                   Selected file: {selectedFile.name}
                 </p>
               )}
+
               <button
                 className={`mt-4 py-2 px-6 rounded-lg ${buttonBg}`}
                 onClick={handleValidate}
@@ -235,8 +223,9 @@ const Upload = () => {
                   Start New Validation
                 </button>
               </div>
+
               <div className="overflow-x-auto">
-                <table className={`min-w-full text-left text-sm`}>
+                <table className="min-w-full text-left text-sm">
                   <thead>
                     <tr
                       className={`${
@@ -265,7 +254,7 @@ const Upload = () => {
                       >
                         <td className="py-3">
                           {r.final_profile?.provider_name ||
-                            r.original_data.full_name}
+                            r.original_data?.full_name}
                         </td>
                         <td className="py-3">
                           {r.final_profile?.npi || "N/A"}

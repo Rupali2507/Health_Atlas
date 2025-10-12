@@ -17,7 +17,7 @@ const Sidebar = () => {
   const hoverBg = Dark ? "hover:bg-gray-700" : "hover:bg-gray-100";
 
   return (
-    <div className="fixed w-full h-screen">
+    <>
       {/* Toggle Button for Mobile */}
       <div
         className="lg:hidden cursor-pointer m-4 z-50 mt-10"
@@ -32,7 +32,7 @@ const Sidebar = () => {
 
       {/* Sidebar */}
       <div
-        className={`fixed lg:static inset-y-0 left-0 transform ${
+        className={`fixed h-screen lg:static inset-y-0 left-0 transform ${
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         } ${sidebarBg} lg:translate-x-0 transition-transform duration-300 ease-in-out lg:flex flex-col h-screen w-[70%] sm:w-[50%] md:w-[35%] lg:w-[20%] border-r-2 border-gray-300 shadow-lg z-40`}
       >
@@ -76,7 +76,7 @@ const Sidebar = () => {
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
