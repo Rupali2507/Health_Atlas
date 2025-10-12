@@ -65,46 +65,66 @@ const Upload = () => {
   };
 
   const handleValidate = async () => {
-    if (!selectedFile) return;
-    setIsLoading(true);
-    setIsFinished(false);
-    setLog(["Starting validation process..."]);
-    let currentRunResults = [];
-    setResults([]);
+  if (!selectedFile) return;
+  setIsLoading(true);
+  setIsFinished(false);
+  setLog(["Starting validation process..."]);
+  let currentRunResults = [];
+  setResults([]);
 
-    const formData = new FormData();
-    formData.append("file", selectedFile);
+  const formData = new FormData();
+  formData.append("file", selectedFile);
 
-    console.log("Attempting to connect to backend at:", `${API_URL}/validate-file`);
+  console.log("Attempting to connect to backend at:", `${API_URL}/validate-file`);
 
+  try {
+    const response = await fetch(`${API_URL}/validate-file`, {
+      method: "POST",
+      body: formData,
+    });
 
-    try {
-      const response = await fetch(`${API_URL}/validate-file`,  {
-        method: "POST",
-        body: formData,
-      });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n\n");
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
+      // Decode chunk and add to buffer
+      buffer += decoder.decode(value, { stream: true });
+      
+      // Process complete SSE messages (separated by \n\n)
+      const events = buffer.split('\n\n');
+      
+      // Keep the last incomplete event in buffer
+      buffer = events.pop() || '';
+
+      for (const event of events) {
+        if (!event.trim()) continue;
+        
+        // Parse SSE format: "data: {json}"
+        const lines = event.split('\n');
         for (const line of lines) {
-          if (line.startsWith("data:")) {
-            const dataStr = line.substring(5);
-            if (dataStr) {
+          if (line.startsWith('data:')) {
+            const dataStr = line.substring(5).trim();
+            
+            if (dataStr && dataStr !== '[DONE]') {
               try {
                 const data = JSON.parse(dataStr);
-                if (data.type === "log")
+                
+                console.log('Received SSE data:', data); // Debug log
+                
+                if (data.type === "log") {
                   setLog((prev) => [...prev, data.content]);
-                else if (data.type === "result") {
+                } else if (data.type === "result") {
                   currentRunResults.push(data.data);
                   setResults((prev) => [...prev, data.data]);
-                } else if (data.type === "close") {
+                } else if (data.type === "close" || data.type === "complete") {
                   setIsLoading(false);
                   setIsFinished(true);
                   addValidationRun({
@@ -112,16 +132,33 @@ const Upload = () => {
                     results: currentRunResults,
                   });
                 }
-              } catch {}
+              } catch (parseErr) {
+                console.error('JSON parse error:', parseErr, 'Data:', dataStr);
+              }
             }
           }
         }
       }
-    } catch (err) {
-      setLog((prev) => [...prev, `ERROR: ${err.message}`]);
-      setIsLoading(false);
     }
-  };
+
+    // Ensure UI updates if stream ends without close event
+    if (isLoading) {
+      setIsLoading(false);
+      setIsFinished(true);
+      if (currentRunResults.length > 0) {
+        addValidationRun({
+          fileName: selectedFile.name,
+          results: currentRunResults,
+        });
+      }
+    }
+
+  } catch (err) {
+    console.error('Fetch error:', err);
+    setLog((prev) => [...prev, `ERROR: ${err.message}`]);
+    setIsLoading(false);
+  }
+};
 
   // Dynamic classes based on dark mode
   const bgMain = Dark ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-900";
