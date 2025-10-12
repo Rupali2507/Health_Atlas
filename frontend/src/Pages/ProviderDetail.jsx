@@ -17,7 +17,7 @@ const ProviderDetail = () => {
         }`}
       >
         <Sidebar />
-        <div className="flex-1 lg:ml-[20vw]">
+        <div className="flex-1 ">
           <Navbar_III />
           <div className="p-6 text-center">
             <h1 className="text-2xl font-bold mt-10">No Provider Selected</h1>
@@ -41,7 +41,7 @@ const ProviderDetail = () => {
 
     return (
       <div
-        className={`p-6 rounded-2xl shadow-sm border lg:ml-[20vw] mb-4 ${
+        className={`p-6 rounded-2xl shadow-sm border mb-4 ${
           Dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
         }`}
       >
@@ -74,7 +74,7 @@ const ProviderDetail = () => {
       }`}
     >
       <Sidebar />
-      <div className="flex-1">
+      <div className="flex-1 lg:ml-[20vw]">
         <Navbar_III />
         <div className="p-6">
           <button
