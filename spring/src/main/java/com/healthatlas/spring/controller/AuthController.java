@@ -1,7 +1,6 @@
 package com.healthatlas.spring.controller;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,13 +19,12 @@ public class AuthController {
     public AuthController(AuthService authService) {
         this.authService = authService;
     }
-    @CrossOrigin(origins = "https://health-atlas.vercel.app")
+
     @PostMapping("/signup")
     public ResponseEntity<AuthResponse> signup(@RequestBody SignUpRequest request) {
         return ResponseEntity.ok(authService.signup(request));
     }
     
-    @CrossOrigin(origins = "https://health-atlas.vercel.app")
     @PostMapping("/signin")
     public ResponseEntity<AuthResponse> signin(@RequestBody SignInRequest request) {
         return ResponseEntity.ok(authService.signin(request));
