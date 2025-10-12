@@ -39,20 +39,34 @@ def search_npi_registry(first_name: str = "", last_name: str = "", npi_number: s
     except requests.exceptions.RequestException as e:
         return {"error": f"API request failed: {e}"}
 
+
 def parse_provider_pdf(pdf_path: str) -> str:
-    """Converts a PDF file into text using the PyPDF2 library."""
-    print(f"\nTOOL: Parsing PDF '{pdf_path}' using PyPDF2...")
-    if not os.path.exists(pdf_path):
-        return f"Error: PDF not found at '{pdf_path}'"
+    """Uploads a PDF to the VLM parsing microservice and returns the text."""
+    print(f"\nTOOL: Sending PDF to VLM parsing service...")
+
+    # Get the service URL from the environment variable we just set
+    parser_url = os.environ.get("PDF_PARSER_URL")
+    if not parser_url:
+        return "Error: PDF_PARSER_URL environment variable not set."
+
     try:
-        reader = PdfReader(pdf_path)
-        extracted_text = ""
-        for page in reader.pages:
-            extracted_text += page.extract_text() + "\n"
-        print("TOOL: Successfully extracted text from PDF.")
-        return extracted_text
-    except Exception as e:
-        return f"An unexpected error occurred while parsing the PDF: {e}"
+        with open(pdf_path, "rb") as f:
+            # The 'files' dictionary tells requests how to send the file
+            files = {'file': (os.path.basename(pdf_path), f, 'application/pdf')}
+
+            # Make the API call to your new microservice
+            response = requests.post(f"{parser_url}/parse-pdf/", files=files, timeout=300)
+
+            response.raise_for_status()
+            data = response.json()
+
+            if "text" in data:
+                print("TOOL: Successfully extracted text using VLM microservice.")
+                return data["text"]
+            else:
+                return f"Error from parsing service: {data.get('error', 'Unknown error')}"
+    except requests.exceptions.RequestException as e:
+        return f"Error calling PDF parsing service: {e}"
 
 # --- TOOL 3: DYNAMIC WEB SCRAPER (Edge Version) ---
 def scrape_provider_website(url: str) -> str:
