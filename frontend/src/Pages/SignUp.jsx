@@ -30,7 +30,7 @@ const SignUp = () => {
       return;
     }
 
-    setLoading(true);
+    // setLoading(true);
     try {
       const response = await fetch("http://localhost:8080/api/auth/signup", {
         method: "POST",
@@ -52,7 +52,7 @@ const SignUp = () => {
       console.error(err);
       alert(err.message || "Error signing up");
     } finally {
-      setLoading(false);
+      // setLoading(false);
     }
   };
 
@@ -101,7 +101,7 @@ const SignUp = () => {
               type="submit"
               className="bg-blue-800 text-white py-3 rounded-xl font-semibold hover:bg-blue-900 transition"
             >
-              {loading ? "Signing Up..." : "Sign Up"}
+              Signup
             </button>
           </form>
 
