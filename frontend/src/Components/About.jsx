@@ -24,12 +24,6 @@ const About = () => {
         >
           Sign in to Dashboard
         </button>
-
-        <div className="text-xs text-gray-600">
-          Note:Developed for EY Techathon 6.0 by [DevSquad], showcasing
-          automated data quality improvement using publicly available and
-          synthetic datasets.
-        </div>
       </div>
     </div>
   );

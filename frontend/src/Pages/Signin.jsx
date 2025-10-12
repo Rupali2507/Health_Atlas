@@ -24,19 +24,18 @@ const Signin = () => {
       body: JSON.stringify({ email, password }),
     });
 
-    if (!response.ok) throw new Error("Login failed");
+      if (!response.ok) throw new Error("Login failed");
 
-    const data = await response.json();
-    localStorage.setItem("token", data.token);
-    console.log("User:", data.user);
+      const data = await response.json();
+      localStorage.setItem("token", data.token);
+      console.log("User:", data.user);
 
-    navigate("/dashboard");
-  } catch (err) {
-    console.error(err);
-    alert("Invalid credentials!");
-  }
-};
-
+      navigate("/dashboard");
+    } catch (err) {
+      console.error(err);
+      alert("Invalid credentials!");
+    }
+  };
 
   return (
     <div
@@ -118,7 +117,7 @@ const Signin = () => {
               Dark ? "text-gray-400" : "text-gray-500"
             }`}
           >
-            Don’t have an account?{" "}
+            Don't have an account?{" "}
             <span
               onClick={() => navigate("/signUp")}
               className="text-blue-500 cursor-pointer hover:underline hover:text-blue-400 transition-colors"
