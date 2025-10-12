@@ -3,8 +3,8 @@ import Sidebar from "../Components/Sidebar";
 import Navbar_III from "../Components/Navbar_III";
 import { useHealthContext } from "../Context/HealthContext";
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://health-atlas-backend.onrender.com';
-
+const API_URL =
+  import.meta.env.VITE_API_URL || "https://health-atlas-backend.onrender.com";
 
 // --- SVG Icons ---
 const FiUploadCloud = ({ Dark }) => (
@@ -87,7 +87,10 @@ const Upload = () => {
     const formData = new FormData();
     formData.append("file", selectedFile);
 
-    console.log("Attempting to connect to backend at:", `${API_URL}/validate-file`);
+    console.log(
+      "Attempting to connect to backend at:",
+      `${API_URL}/validate-file`
+    );
 
     try {
       const response = await fetch(`${API_URL}/validate-file`, {
@@ -101,7 +104,7 @@ const Upload = () => {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = '';
+      let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -109,34 +112,37 @@ const Upload = () => {
 
         // Decode chunk and add to buffer
         buffer += decoder.decode(value, { stream: true });
-        
+
         // Process complete SSE messages (separated by \n\n)
-        const events = buffer.split('\n\n');
-        
+        const events = buffer.split("\n\n");
+
         // Keep the last incomplete event in buffer
-        buffer = events.pop() || '';
+        buffer = events.pop() || "";
 
         for (const event of events) {
           if (!event.trim()) continue;
-          
+
           // Parse SSE format: "data: {json}"
-          const lines = event.split('\n');
+          const lines = event.split("\n");
           for (const line of lines) {
-            if (line.startsWith('data:')) {
+            if (line.startsWith("data:")) {
               const dataStr = line.substring(5).trim();
-              
-              if (dataStr && dataStr !== '[DONE]') {
+
+              if (dataStr && dataStr !== "[DONE]") {
                 try {
                   const data = JSON.parse(dataStr);
-                  
-                  console.log('Received SSE data:', data); // Debug log
-                  
+
+                  console.log("Received SSE data:", data); // Debug log
+
                   if (data.type === "log") {
                     setLog((prev) => [...prev, data.content]);
                   } else if (data.type === "result") {
                     currentRunResults.push(data.data);
                     setResults((prev) => [...prev, data.data]);
-                  } else if (data.type === "close" || data.type === "complete") {
+                  } else if (
+                    data.type === "close" ||
+                    data.type === "complete"
+                  ) {
                     setIsLoading(false);
                     setIsFinished(true);
                     addValidationRun({
@@ -145,7 +151,12 @@ const Upload = () => {
                     });
                   }
                 } catch (parseErr) {
-                  console.error('JSON parse error:', parseErr, 'Data:', dataStr);
+                  console.error(
+                    "JSON parse error:",
+                    parseErr,
+                    "Data:",
+                    dataStr
+                  );
                 }
               }
             }
@@ -164,9 +175,8 @@ const Upload = () => {
           });
         }
       }
-
     } catch (err) {
-      console.error('Fetch error:', err);
+      console.error("Fetch error:", err);
       setLog((prev) => [...prev, `ERROR: ${err.message}`]);
       setIsLoading(false);
     }
@@ -191,7 +201,7 @@ const Upload = () => {
   return (
     <div className={`flex min-h-screen ${bgMain}`}>
       <Sidebar />
-      <div className="flex-1 ml-[20vw]">
+      <div className="flex-1 lg:ml-[20vw]">
         <Navbar_III />
         <div className="p-6">
           <h1 className="font-bold text-3xl mb-6">
