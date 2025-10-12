@@ -102,7 +102,7 @@ const Navbar_III = () => {
               }`}
             >
               <ul className="text-sm">
-                <li
+                {/* <li
                   className={`px-4 py-2 cursor-pointer ${
                     Dark ? "hover:bg-gray-600" : "hover:bg-gray-100"
                   }`}
@@ -115,7 +115,7 @@ const Navbar_III = () => {
                   }`}
                 >
                   Settings
-                </li>
+                </li> */}
                 <li
                   onClick={handleLogout}
                   className={`px-4 py-2 cursor-pointer text-red-500 ${
