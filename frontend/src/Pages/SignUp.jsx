@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { useHealthContext } from "../Context/HealthContext";
 import Navbar from "../Components/Navbar";
-import { useNavigate } from "react-router-dom"; // ✅ 1. Import useNavigate
+import { useNavigate } from "react-router-dom";
 
 const SignUp = () => {
-  const { Dark } = useHealthContext(); // ✅ 2. Removed 'navigate' from here
-  const navigate = useNavigate(); // ✅ 3. Get the navigate function directly
+  const { Dark } = useHealthContext();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -22,14 +22,40 @@ const SignUp = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (formData.password !== formData.confirmPassword) {
       alert("Passwords do not match!");
       return;
     }
-    console.log("Form Data:", formData);
-    navigate("/login");
+
+    // setLoading(true);
+    try {
+      const response = await fetch(
+        "https://health-atlas-fjm4.onrender.com/api/auth/signup",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: formData.name,
+            email: formData.email,
+            password: formData.password,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.message || "Signup failed");
+
+      alert(data.message || "Signup successful! Please login.");
+      navigate("/login");
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "Error signing up");
+    } finally {
+      // setLoading(false);
+    }
   };
 
   return (
