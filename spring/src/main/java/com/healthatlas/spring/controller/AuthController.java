@@ -14,7 +14,7 @@ import com.healthatlas.spring.service.AuthService;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "https://health-atlas.vercel.app/") // React frontend
+@CrossOrigin(origins = "https://health-atlas.vercel.app") // React frontend
 public class AuthController {
     private final AuthService authService;
 
