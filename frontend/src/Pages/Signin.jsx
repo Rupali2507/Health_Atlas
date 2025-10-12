@@ -18,7 +18,7 @@ const Signin = () => {
   const handleSubmit = async (e) => {
   e.preventDefault();
   try {
-    const response = await fetch("https://health-atlas-fjm4.onrender.com/api/auth/signin", {
+    const response = await fetch("https://health-atlas-2.onrender.com/api/auth/signin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
