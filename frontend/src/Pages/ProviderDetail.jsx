@@ -41,7 +41,7 @@ const ProviderDetail = () => {
 
     return (
       <div
-        className={`p-6 rounded-2xl shadow-sm border mb-4 ${
+        className={`p-6 rounded-2xl shadow-sm border lg:ml-[20vw] mb-4 ${
           Dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
         }`}
       >
