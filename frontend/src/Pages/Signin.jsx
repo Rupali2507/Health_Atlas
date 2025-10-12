@@ -16,27 +16,29 @@ const Signin = () => {
   }, [Dark]);
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  try {
-    const response = await fetch("http://localhost:8080/api/auth/signin", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    e.preventDefault();
+    try {
+      const response = await fetch(
+        "https://health-atlas-fjm4.onrender.com/api/auth/signin",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        }
+      );
 
-    if (!response.ok) throw new Error("Login failed");
+      if (!response.ok) throw new Error("Login failed");
 
-    const data = await response.json();
-    localStorage.setItem("token", data.token);
-    console.log("User:", data.user);
+      const data = await response.json();
+      localStorage.setItem("token", data.token);
+      console.log("User:", data.user);
 
-    navigate("/dashboard");
-  } catch (err) {
-    console.error(err);
-    alert("Invalid credentials!");
-  }
-};
-
+      navigate("/dashboard");
+    } catch (err) {
+      console.error(err);
+      alert("Invalid credentials!");
+    }
+  };
 
   return (
     <div
