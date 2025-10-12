@@ -16,18 +16,20 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @EnableWebSecurity
 public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
-  protected void configure(HttpSecurity http) throws Exception {
+protected void configure(HttpSecurity http) throws Exception {
     http.cors().and()
         .csrf().disable()
         .authorizeRequests()
+        .requestMatchers("/api/auth/signup", "/api/auth/signin").permitAll()  // allow public access to signup/signin
         .anyRequest().authenticated();
-  }
+}
+
 
   @Bean
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration configuration = new CorsConfiguration();
     configuration.setAllowedOrigins(List.of("https://health-atlas.vercel.app"));
-    configuration.setAllowedMethods(List.of("POST"));
+    configuration.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
     configuration.setAllowedHeaders(List.of("*"));
     configuration.setAllowCredentials(true);
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
