@@ -14,7 +14,6 @@ import com.healthatlas.spring.service.AuthService;
 
 @RestController
 @RequestMapping("/api/auth")
-// @CrossOrigin(origins = "http://localhost:5173") // React frontend
 public class AuthController {
     private final AuthService authService;
 
