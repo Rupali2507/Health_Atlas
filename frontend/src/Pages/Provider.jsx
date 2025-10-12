@@ -88,7 +88,7 @@ const Provider = () => {
   return (
     <div className={`flex min-h-screen ${bgMain}`}>
       <Sidebar />
-      <div className="flex-1 ">
+      <div className="flex-1 ml-[20vw]">
         <Navbar_III />
         <div className="p-6">
           <h1 className="text-3xl font-bold font-[Inter] mb-6">Providers</h1>
