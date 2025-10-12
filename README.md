@@ -39,7 +39,7 @@ It leverages a **multi-agent AI system** that autonomously verifies, corrects, a
 ### ⚙️ 1. Clone the Repository
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/muskan-khushi/Health_Atlas
 cd Health_Atlas
 ```
 
