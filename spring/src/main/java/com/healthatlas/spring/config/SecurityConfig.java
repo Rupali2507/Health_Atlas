@@ -27,7 +27,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration configuration = new CorsConfiguration();
     configuration.setAllowedOrigins(List.of("https://health-atlas.vercel.app"));
-    configuration.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
+    configuration.setAllowedMethods(List.of("POST"));
     configuration.setAllowedHeaders(List.of("*"));
     configuration.setAllowCredentials(true);
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
