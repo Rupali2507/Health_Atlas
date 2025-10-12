@@ -21,13 +21,13 @@ public class AuthController {
     public AuthController(AuthService authService) {
         this.authService = authService;
     }
-    @CrossOrigin(origins = "https://your-frontend.vercel.app")
+    @CrossOrigin(origins = "https://health-atlas.vercel.app")
     @PostMapping("/signup")
     public ResponseEntity<AuthResponse> signup(@RequestBody SignUpRequest request) {
         return ResponseEntity.ok(authService.signup(request));
     }
     
-    @CrossOrigin(origins = "https://your-frontend.vercel.app")
+    @CrossOrigin(origins = "https://health-atlas.vercel.app")
     @PostMapping("/signin")
     public ResponseEntity<AuthResponse> signin(@RequestBody SignInRequest request) {
         return ResponseEntity.ok(authService.signin(request));
