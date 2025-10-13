@@ -1,7 +1,12 @@
 import React, { useState } from "react";
 import assets from "../assets/assets";
 import { MdDashboard, MdUpload } from "react-icons/md";
-import { HiOutlineChevronLeft, HiUsers, HiOutlineMenu } from "react-icons/hi";
+import {
+  HiOutlineChevronLeft,
+  HiUsers,
+  HiUser,
+  HiOutlineMenu,
+} from "react-icons/hi";
 import { useHealthContext } from "../Context/HealthContext";
 import { useNavigate } from "react-router-dom";
 
@@ -73,6 +78,14 @@ const Sidebar = () => {
           >
             <HiUsers className="w-5 h-5" />
             <div>Providers</div>
+          </div>
+
+          <div
+            onClick={() => navigate("/apply")}
+            className={`flex items-center gap-4 p-3 cursor-pointer ${hoverBg}`}
+          >
+            <HiUser className="w-5 h-5" />
+            <div>New Providers</div>
           </div>
         </div>
       </div>
