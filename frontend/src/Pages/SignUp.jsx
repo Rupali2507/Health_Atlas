@@ -41,6 +41,7 @@ const SignUp = () => {
             email: formData.email,
             password: formData.password,
           }),
+          credentials: "include",
         }
       );
 
