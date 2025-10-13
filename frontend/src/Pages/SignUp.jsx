@@ -32,7 +32,7 @@ const SignUp = () => {
     // setLoading(true);
     try {
       const response = await fetch(
-        "https://health-atlas-fjm4.onrender.com/api/auth/signup",
+        "https://health-atlas-2.onrender.com/api/auth/signup",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
