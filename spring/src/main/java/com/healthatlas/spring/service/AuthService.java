@@ -10,7 +10,6 @@ import com.healthatlas.spring.model.User;
 import com.healthatlas.spring.repository.UserRepository;
 import com.healthatlas.spring.security.JwtUtil;
 
-
 @Service
 public class AuthService {
     private final UserRepository userRepository;
