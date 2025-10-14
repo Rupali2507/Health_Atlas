@@ -52,7 +52,7 @@ const Apply = () => {
       const aiForm = new FormData();
       aiForm.append("file", file);
 
-      const aiResponse = await fetch(`${API_AI}/api/validate-credentials`, {
+      const aiResponse = await fetch(`${API_AI}/validate-file`, {
         method: "POST",
         body: aiForm,
       });
