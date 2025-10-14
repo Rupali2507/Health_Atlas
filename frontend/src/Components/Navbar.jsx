@@ -39,10 +39,7 @@ const Navbar = ({
     >
       <div className="flex justify-between items-center px-5 py-4 max-w-7xl mx-auto">
         {/* Logo */}
-        <div
-          className="w-24 h-24 cursor-pointer"
-          onClick={() => navigate("/dashboard")}
-        >
+        <div className="w-24 h-24 cursor-pointer" onClick={() => navigate("/")}>
           <img src={assets.logo} alt="Logo" className="w-full h-full" />
         </div>
 
@@ -50,7 +47,7 @@ const Navbar = ({
         {isHomePage && (
           <div className="hidden lg:flex gap-6 items-center text-md font-medium">
             <div
-              onClick={() => navigate("/dashboard")}
+              onClick={() => navigate("/")}
               className="cursor-pointer hover:text-teal-500 transition-colors"
             >
               Home
