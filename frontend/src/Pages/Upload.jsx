@@ -3,8 +3,8 @@ import Sidebar from "../Components/Sidebar";
 import Navbar_III from "../Components/Navbar_III";
 import { useHealthContext } from "../Context/HealthContext";
 
-const API_URL =
-  import.meta.env.VITE_API_URL || "https://health-atlas-backend.onrender.com";
+const API_URL = "http://127.0.0.1:8000"
+  // import.meta.env.VITE_API_URL || "https://health-atlas-backend.onrender.com";
 
 // --- SVG Icons ---
 const FiUploadCloud = ({ Dark }) => (

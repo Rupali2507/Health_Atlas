@@ -2,8 +2,11 @@ import requests
 import json
 import os
 import subprocess
+import google.generativeai as genai
+from pdf2image import convert_from_path
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
+from pdf2image import convert_from_path
 
 
 from selenium import webdriver
@@ -38,21 +41,80 @@ def search_npi_registry(first_name: str = "", last_name: str = "", npi_number: s
             return {"error": "No results found."}
     except requests.exceptions.RequestException as e:
         return {"error": f"API request failed: {e}"}
+    
+def parse_provider_pdf(pdf_path: str) -> list[dict]:
+    """
+    Converts a PDF to images, sends them to the Gemini VLM, 
+    and extracts structured provider data.
+    """
+    print(f"\nTOOL: Parsing PDF '{pdf_path}' using Google Gemini VLM...")
+    
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        return [{"error": "GOOGLE_API_KEY environment variable not set."}]
+    
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel('gemini-pro-vision-latest')
 
-def parse_provider_pdf(pdf_path: str) -> str:
-    """Converts a PDF file into text using the PyPDF2 library."""
-    print(f"\nTOOL: Parsing PDF '{pdf_path}' using PyPDF2...")
-    if not os.path.exists(pdf_path):
-        return f"Error: PDF not found at '{pdf_path}'"
     try:
-        reader = PdfReader(pdf_path)
-        extracted_text = ""
-        for page in reader.pages:
-            extracted_text += page.extract_text() + "\n"
-        print("TOOL: Successfully extracted text from PDF.")
-        return extracted_text
+        # Convert PDF pages to a list of images that genai can use
+        images = convert_from_path(pdf_path)
+        
+        # Prepare image parts for the API call
+        image_parts = []
+        for image in images:
+            # The genai library can handle Pillow image objects directly
+            image_parts.append(image)
+
+        print(f"TOOL: Converted PDF into {len(image_parts)} image(s) for Gemini analysis.")
+
+        prompt = """
+        Analyze the following image(s) of a provider directory.
+        Your task is to extract the information for EACH provider listed.
+        Return the data as a JSON array, where each object represents one provider.
+        
+        The JSON object for each provider should have the following keys:
+        - "full_name" (string)
+        - "npi" (string, if available, otherwise use an empty string "")
+        - "address" (string, just the street address)
+        - "city" (string)
+        - "state" (string, 2-letter abbreviation)
+        - "zip_code" (string)
+
+        Return ONLY the JSON array in a markdown code block. Do not include any other text.
+        """
+        
+        # Create the content list for the API
+        contents = [prompt] + image_parts
+        
+        print("TOOL: Sending request to Google Gemini...")
+        response = model.generate_content(contents)
+        response_text = response.text
+        print("TOOL: Received response from Gemini.")
+        
+        # Gemini often wraps JSON in ```json ... ```, so we robustly extract it.
+        json_str = response_text.strip().replace("```json", "").replace("```", "").strip()
+        
+        return json.loads(json_str)
+
     except Exception as e:
-        return f"An unexpected error occurred while parsing the PDF: {e}"
+        print(f"An unexpected error occurred while parsing the PDF with Gemini: {e}")
+        return [{"error": f"An unexpected error occurred: {e}"}]
+
+# def parse_provider_pdf(pdf_path: str) -> str:
+#     """Converts a PDF file into text using the PyPDF2 library."""
+#     print(f"\nTOOL: Parsing PDF '{pdf_path}' using PyPDF2...")
+#     if not os.path.exists(pdf_path):
+#         return f"Error: PDF not found at '{pdf_path}'"
+#     try:
+#         reader = PdfReader(pdf_path)
+#         extracted_text = ""
+#         for page in reader.pages:
+#             extracted_text += page.extract_text() + "\n"
+#         print("TOOL: Successfully extracted text from PDF.")
+#         return extracted_text
+#     except Exception as e:
+#         return f"An unexpected error occurred while parsing the PDF: {e}"
     
 
 # def parse_provider_pdf(pdf_path: str) -> str:
