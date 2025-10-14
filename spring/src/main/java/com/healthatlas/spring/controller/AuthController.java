@@ -12,6 +12,8 @@ import com.healthatlas.spring.dto.SignInRequest;
 import com.healthatlas.spring.dto.SignUpRequest;
 import com.healthatlas.spring.service.AuthService;
 
+import jakarta.validation.Valid;
+
 @RestController
 @RequestMapping("/api/auth")
 @CrossOrigin(origins = "https://health-atlas.vercel.app") // React frontend
@@ -23,7 +25,7 @@ public class AuthController {
     }
 
     @PostMapping("/signup")
-    public ResponseEntity<AuthResponse> signup(@RequestBody SignUpRequest request) {
+    public ResponseEntity<AuthResponse> signup(@Valid @RequestBody SignUpRequest request) {
         return ResponseEntity.ok(authService.signup(request));
     }
     
