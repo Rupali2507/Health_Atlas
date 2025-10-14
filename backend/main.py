@@ -13,7 +13,7 @@ from tools import parse_provider_pdf
 app = FastAPI(title="Health Atlas Provider Validator")
 
 origins = [
-    "https://health-atlas-alpha.vercel.app",  # Your deployed Vercel frontend
+    "https://health-atlas.vercel.app",  # Your deployed Vercel frontend
     "http://localhost:5173",                   # Local development
 ]
 
@@ -48,11 +48,18 @@ async def validate_file(file: UploadFile = File(...)):
                 provider_list = df.to_dict(orient='records')
             
             elif file.filename.endswith('.pdf'):
-                yield f"data: {json.dumps({'type': 'log', 'content': 'Parsing PDF file...'})}\n\n"
-                await asyncio.sleep(0)  # Allow event to flush
+                yield f"data: {json.dumps({'type': 'log', 'content': 'Parsing PDF with Vision AI... This may take a moment.'})}\n\n"
+                await asyncio.sleep(0)
                 
-                extracted_text = parse_provider_pdf(temp_filename)
-                provider_list = [{"full_name": "Data from PDF", "unstructured_text": extracted_text}]
+                # The VLM tool now returns a list of provider dictionaries
+                provider_list = parse_provider_pdf(temp_filename)
+                
+                # Check for an error returned from the tool
+                if provider_list and isinstance(provider_list[0], dict) and provider_list[0].get("error"):
+                    error_msg = provider_list[0]["error"]
+                    yield f"data: {json.dumps({'type': 'log', 'content': f'PDF Parsing Error: {error_msg}'})}\n\n"
+                    # Set provider list to empty to stop processing
+                    provider_list = []
 
             total_records = len(provider_list)
             yield f"data: {json.dumps({'type': 'log', 'content': f'Found {total_records} records to process.'})}\n\n"
