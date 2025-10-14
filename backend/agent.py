@@ -121,13 +121,17 @@ def enrichment_node(state: AgentState) -> dict:
         print(f"Enrichment parsing error: {e}")
         return {"enrichment_data": {"error": f"Failed to parse enrichment data: {str(e)}"}}
 
+# agent.py
+
 def quality_assurance_node(state: AgentState) -> dict:
     print("---AGENT ROLE: Quality Assurance---")
     flags = []
     
-    initial_address = state["initial_data"].get("address", "").upper()
+    initial_data = state["initial_data"] # Get initial data
+    initial_address = initial_data.get("address", "").upper()
     npi_addresses = state["npi_result"].get("addresses", [])
     
+    # --- 1. Existing Address Mismatch Check ---
     npi_loc_address = ""
     for addr in npi_addresses:
         if addr.get("address_purpose") == "LOCATION":
@@ -137,6 +141,16 @@ def quality_assurance_node(state: AgentState) -> dict:
     if npi_loc_address and fuzz.partial_ratio(initial_address, npi_loc_address) < 70:
         flags.append(f"ADDRESS MISMATCH: Initial: '{initial_address}', NPI: '{npi_loc_address}'.")
     
+    # --- 2. NEW: Mocked License Verification Check ---
+    license_number = initial_data.get("license_number", "").strip()
+
+    if not license_number:
+        # Flag if the license number is missing from the input data
+        flags.append("LICENSE ISSUE: Missing license number for verification.")
+    elif "SUSPENDED" in license_number.upper():
+        # Flag if the mock check finds a suspended license
+        flags.append("LICENSE ISSUE: License status reported as SUSPENDED.")
+        
     return {"qa_flags": flags}
 
 def synthesis_node(state: AgentState) -> dict:
