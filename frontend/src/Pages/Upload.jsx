@@ -3,7 +3,7 @@ import Sidebar from "../Components/Sidebar";
 import Navbar_III from "../Components/Navbar_III";
 import { useHealthContext } from "../Context/HealthContext";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 // --- SVG Icons ---
 const FiUploadCloud = ({ Dark }) => (
@@ -50,7 +50,6 @@ const Upload = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: 'confidence_score', direction: 'ascending' });
-
 
   // --- File Handlers ---
   const handleFileChange = (e) => {
@@ -121,7 +120,6 @@ const Upload = () => {
               if (dataStr && dataStr !== "[DONE]") {
                 try {
                   const data = JSON.parse(dataStr);
-                  console.log("Received SSE data:", data);
                   if (data.type === "log") {
                     setLog((prev) => [...prev, data.content]);
                   } else if (data.type === "result") {
@@ -250,15 +248,13 @@ const Upload = () => {
                       <th className="p-3">Provider Name</th>
                       <th className="p-3">NPI</th>
                       <th className="p-3 hidden md:table-cell">Verified Address</th>
-                      <th
-                        className="p-3 cursor-pointer"
-                        onClick={() => requestSort('confidence_score')}
-                      >
+                      <th className="p-3 cursor-pointer" onClick={() => requestSort('confidence_score')}>
                         Confidence Score
                         {sortConfig.key === 'confidence_score' && (
                           <span>{sortConfig.direction === 'ascending' ? ' ▲' : ' ▼'}</span>
                         )}
                       </th>
+                      <th className="p-3">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -268,11 +264,19 @@ const Upload = () => {
                         <td className="py-3 px-3">{r.final_profile?.npi || "N/A"}</td>
                         <td className="py-3 px-3 hidden md:table-cell">{r.final_profile?.address || "N/A"}</td>
                         <td className="py-3 px-3">
-                          <span
-                            className={`px-3 py-1 text-xs font-bold rounded-full ${r.confidence_score >= 0.7 ? (Dark ? "bg-green-600 text-green-100" : "bg-green-100 text-green-800") : r.confidence_score >= 0.4 ? (Dark ? "bg-yellow-600 text-yellow-100" : "bg-yellow-100 text-yellow-800") : (Dark ? "bg-red-600 text-red-100" : "bg-red-100 text-red-800")}`}
-                          >
+                          <span className={`px-3 py-1 text-xs font-bold rounded-full ${r.confidence_score >= 0.7 ? (Dark ? "bg-green-600 text-green-100" : "bg-green-100 text-green-800") : r.confidence_score >= 0.4 ? (Dark ? "bg-yellow-600 text-yellow-100" : "bg-yellow-100 text-yellow-800") : (Dark ? "bg-red-600 text-red-100" : "bg-red-100 text-red-800")}`}>
                             {(r.confidence_score * 100).toFixed(0)}%
                           </span>
+                        </td>
+                        <td className="py-3 px-3">
+                          {r.confidence_score < 0.7 && (
+                            <a
+                              href={`mailto:review-team@example.com?subject=Provider Review Required: ${r.final_profile?.provider_name || r.original_data?.full_name}&body=Please manually review the following provider:%0D%0A%0D%0AName: ${r.final_profile?.provider_name || r.original_data?.full_name}%0D%0ANPI: ${r.final_profile?.npi || 'N/A'}%0D%0AConfidence Score: ${(r.confidence_score * 100).toFixed(0)}%25%0D%0A%0D%0AFlags:%0D%0A- ${r.qa_flags?.join('%0D%0A- ') || 'No specific flags.'}%0D%0A%0D%0AThank you.`}
+                              className={`px-3 py-1 text-xs font-medium rounded-full ${Dark ? 'bg-red-600 text-red-100 hover:bg-red-500' : 'bg-red-100 text-red-800 hover:bg-red-200'}`}
+                            >
+                              Flag for Review
+                            </a>
+                          )}
                         </td>
                       </tr>
                     ))}
