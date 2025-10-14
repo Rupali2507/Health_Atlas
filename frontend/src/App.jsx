@@ -6,7 +6,8 @@ import SignUp from "./Pages/SignUp";
 import Dashboard from "./Pages/Dashboard";
 import Upload from "./Pages/Upload";
 import Provider from "./Pages/Provider";
-import ProviderDetail from "./Pages/ProviderDetail"; // Make sure this file exists
+import ProviderDetail from "./Pages/ProviderDetail";
+import Apply from "./Pages/Apply";
 
 const App = () => {
   return (
@@ -19,6 +20,7 @@ const App = () => {
         <Route path="/upload" element={<Upload />} />
         <Route path="/provider" element={<Provider />} />
         <Route path="/provider-detail" element={<ProviderDetail />} />
+        <Route path="/new-user" element={<Apply />} />
       </Routes>
     </div>
   );
