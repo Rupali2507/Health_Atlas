@@ -1,10 +1,9 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo } from "react";
 import Sidebar from "../Components/Sidebar";
 import Navbar_III from "../Components/Navbar_III";
 import { useHealthContext } from "../Context/HealthContext";
 
-const API_URL =
-  import.meta.env.VITE_API_URL || "https://health-atlas-backend.onrender.com";
+const API_URL = "http://127.0.0.1:8000";
 
 // --- SVG Icons ---
 const FiUploadCloud = ({ Dark }) => (
@@ -50,6 +49,8 @@ const Upload = () => {
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
+  const [sortConfig, setSortConfig] = useState({ key: 'confidence_score', direction: 'ascending' });
+
 
   // --- File Handlers ---
   const handleFileChange = (e) => {
@@ -87,10 +88,7 @@ const Upload = () => {
     const formData = new FormData();
     formData.append("file", selectedFile);
 
-    console.log(
-      "Attempting to connect to backend at:",
-      `${API_URL}/validate-file`
-    );
+    console.log("Attempting to connect to backend at:", `${API_URL}/validate-file`);
 
     try {
       const response = await fetch(`${API_URL}/validate-file`, {
@@ -110,39 +108,26 @@ const Upload = () => {
         const { done, value } = await reader.read();
         if (done) break;
 
-        // Decode chunk and add to buffer
         buffer += decoder.decode(value, { stream: true });
-
-        // Process complete SSE messages (separated by \n\n)
         const events = buffer.split("\n\n");
-
-        // Keep the last incomplete event in buffer
         buffer = events.pop() || "";
 
         for (const event of events) {
           if (!event.trim()) continue;
-
-          // Parse SSE format: "data: {json}"
           const lines = event.split("\n");
           for (const line of lines) {
             if (line.startsWith("data:")) {
               const dataStr = line.substring(5).trim();
-
               if (dataStr && dataStr !== "[DONE]") {
                 try {
                   const data = JSON.parse(dataStr);
-
-                  console.log("Received SSE data:", data); // Debug log
-
+                  console.log("Received SSE data:", data);
                   if (data.type === "log") {
                     setLog((prev) => [...prev, data.content]);
                   } else if (data.type === "result") {
                     currentRunResults.push(data.data);
                     setResults((prev) => [...prev, data.data]);
-                  } else if (
-                    data.type === "close" ||
-                    data.type === "complete"
-                  ) {
+                  } else if (data.type === "close" || data.type === "complete") {
                     setIsLoading(false);
                     setIsFinished(true);
                     addValidationRun({
@@ -151,12 +136,7 @@ const Upload = () => {
                     });
                   }
                 } catch (parseErr) {
-                  console.error(
-                    "JSON parse error:",
-                    parseErr,
-                    "Data:",
-                    dataStr
-                  );
+                  console.error("JSON parse error:", parseErr, "Data:", dataStr);
                 }
               }
             }
@@ -164,7 +144,6 @@ const Upload = () => {
         }
       }
 
-      // Ensure UI updates if stream ends without close event
       if (isLoading) {
         setIsLoading(false);
         setIsFinished(true);
@@ -182,20 +161,36 @@ const Upload = () => {
     }
   };
 
+  const sortedResults = useMemo(() => {
+    let sortableItems = [...results];
+    if (sortConfig.key !== null) {
+      sortableItems.sort((a, b) => {
+        if (a[sortConfig.key] < b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (a[sortConfig.key] > b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [results, sortConfig]);
+
+  const requestSort = (key) => {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
   const bgMain = Dark ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-900";
-  const cardBg = Dark
-    ? "bg-gray-800 border-gray-700"
-    : "bg-white border-gray-200";
+  const cardBg = Dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200";
   const textSecondary = Dark ? "text-gray-300" : "text-gray-700";
-  const buttonBg = Dark
-    ? "bg-teal-600 hover:bg-teal-700 text-white"
-    : "bg-teal-500 hover:bg-teal-600 text-white";
-  const resetBtn = Dark
-    ? "bg-gray-700 hover:bg-gray-600 text-white"
-    : "bg-gray-200 hover:bg-gray-300 text-gray-700";
-  const logBg = Dark
-    ? "bg-gray-700 text-gray-100"
-    : "bg-gray-900/95 text-white";
+  const buttonBg = Dark ? "bg-teal-600 hover:bg-teal-700 text-white" : "bg-teal-500 hover:bg-teal-600 text-white";
+  const resetBtn = Dark ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700";
+  const logBg = Dark ? "bg-gray-700 text-gray-100" : "bg-gray-900/95 text-white";
 
   return (
     <div className={`flex min-h-screen ${bgMain}`}>
@@ -203,155 +198,78 @@ const Upload = () => {
       <div className="flex-1 lg:ml-[20vw]">
         <Navbar_III />
         <div className="p-6">
-          <h1 className="font-bold text-3xl mb-6">
-            Upload & Validate Provider Data
-          </h1>
+          <h1 className="font-bold text-3xl mb-6">Upload & Validate Provider Data</h1>
 
-          {/* Upload Section */}
           {!isFinished && (
-            <div
-              className={`border rounded-2xl p-5 sm:p-8 shadow-sm mb-6 ${cardBg}`}
-            >
-              <h2 className={`text-lg font-semibold mb-2 ${textSecondary}`}>
-                Upload Provider Data
-              </h2>
-
+            <div className={`border rounded-2xl p-5 sm:p-8 shadow-sm mb-6 ${cardBg}`}>
+              <h2 className={`text-lg font-semibold mb-2 ${textSecondary}`}>Upload Provider Data</h2>
               <div
-                className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-xl cursor-pointer ${
-                  Dark
-                    ? "border-purple-500 bg-gray-700 hover:bg-gray-600"
-                    : "border-purple-300 bg-gray-50 hover:bg-gray-100"
-                }`}
+                className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-xl cursor-pointer ${Dark ? "border-purple-500 bg-gray-700 hover:bg-gray-600" : "border-purple-300 bg-gray-50 hover:bg-gray-100"}`}
                 onClick={handleLabelClick}
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
               >
                 <FiUploadCloud Dark={Dark} />
-                <span className={`font-medium ${textSecondary}`}>
-                  Click to upload or drag and drop
-                </span>
-                <span className="text-xs text-gray-400">
-                  CSV or PDF (max. 50MB)
-                </span>
+                <span className={`font-medium ${textSecondary}`}>Click to upload or drag and drop</span>
+                <span className="text-xs text-gray-400">CSV or PDF (max. 50MB)</span>
               </div>
-
-              <input
-                id="file-upload"
-                type="file"
-                accept=".csv,.pdf"
-                className="hidden"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-              />
-
-              {selectedFile && (
-                <p className={`mt-2 ${textSecondary}`}>
-                  Selected file: {selectedFile.name}
-                </p>
-              )}
-
-              <button
-                className={`mt-4 py-2 px-6 rounded-lg ${buttonBg}`}
-                onClick={handleValidate}
-                disabled={isLoading || !selectedFile}
-              >
+              <input id="file-upload" type="file" accept=".csv,.pdf" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+              {selectedFile && (<p className={`mt-2 ${textSecondary}`}>Selected file: {selectedFile.name}</p>)}
+              <button className={`mt-4 py-2 px-6 rounded-lg ${buttonBg}`} onClick={handleValidate} disabled={isLoading || !selectedFile}>
                 {isLoading ? "Validating..." : "Start Validation Cycle"}
               </button>
             </div>
           )}
 
-          {/* Live Log */}
           {isLoading && (
-            <div
-              className={`border rounded-2xl p-5 sm:p-8 shadow-sm mb-6 ${cardBg}`}
-            >
-              <h2 className={`text-lg font-semibold mb-4 ${textSecondary}`}>
-                Live Validation Log
-              </h2>
-              <div
-                className={`font-mono text-xs rounded-lg p-4 h-64 overflow-y-auto ${logBg}`}
-              >
+            <div className={`border rounded-2xl p-5 sm:p-8 shadow-sm mb-6 ${cardBg}`}>
+              <h2 className={`text-lg font-semibold mb-4 ${textSecondary}`}>Live Validation Log</h2>
+              <div className={`font-mono text-xs rounded-lg p-4 h-64 overflow-y-auto ${logBg}`}>
                 {log.map((entry, idx) => (
-                  <p
-                    key={idx}
-                    className="whitespace-pre-wrap"
-                  >{`> ${entry}`}</p>
+                  <p key={idx} className="whitespace-pre-wrap">{`> ${entry}`}</p>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Results Section */}
           {isFinished && (
-            <div
-              className={`border rounded-2xl p-5 sm:p-8 shadow-sm ${cardBg}`}
-            >
+            <div className={`border rounded-2xl p-5 sm:p-8 shadow-sm ${cardBg}`}>
               <div className="flex justify-between items-center mb-4">
                 <h2 className={`text-lg font-semibold flex items-center`}>
                   <FiCheckCircle Dark={Dark} />
                   Validation Complete
                 </h2>
-                <button
-                  onClick={handleClear}
-                  className={`py-2 px-4 rounded-lg ${resetBtn}`}
-                >
+                <button onClick={handleClear} className={`py-2 px-4 rounded-lg ${resetBtn}`}>
                   Start New Validation
                 </button>
               </div>
-
               <div className="overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
                   <thead>
-                    <tr
-                      className={`${
-                        Dark
-                          ? "text-gray-300 border-gray-700"
-                          : "text-gray-600 border-gray-200"
-                      } border-b`}
-                    >
+                    <tr className={`${Dark ? "text-gray-300 border-gray-700" : "text-gray-600 border-gray-200"} border-b`}>
                       <th className="p-3">Provider Name</th>
                       <th className="p-3">NPI</th>
-                      <th className="p-3 hidden md:table-cell">
-                        Verified Address
+                      <th className="p-3 hidden md:table-cell">Verified Address</th>
+                      <th
+                        className="p-3 cursor-pointer"
+                        onClick={() => requestSort('confidence_score')}
+                      >
+                        Confidence Score
+                        {sortConfig.key === 'confidence_score' && (
+                          <span>{sortConfig.direction === 'ascending' ? ' ▲' : ' ▼'}</span>
+                        )}
                       </th>
-                      <th className="p-3">Confidence Score</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {results.map((r, i) => (
-                      <tr
-                        key={i}
-                        className={`border-b ${
-                          Dark
-                            ? "border-gray-700 hover:bg-gray-700"
-                            : "border-gray-200 hover:bg-gray-50"
-                        }`}
-                      >
-                        <td className="py-3">
-                          {r.final_profile?.provider_name ||
-                            r.original_data?.full_name}
-                        </td>
-                        <td className="py-3">
-                          {r.final_profile?.npi || "N/A"}
-                        </td>
-                        <td className="py-3 hidden md:table-cell">
-                          {r.final_profile?.address || "N/A"}
-                        </td>
-                        <td className="py-3">
+                    {sortedResults.map((r, i) => (
+                      <tr key={i} className={`border-b ${Dark ? "border-gray-700 hover:bg-gray-700" : "border-gray-200 hover:bg-gray-50"}`}>
+                        <td className="py-3 px-3">{r.final_profile?.provider_name || r.original_data?.full_name}</td>
+                        <td className="py-3 px-3">{r.final_profile?.npi || "N/A"}</td>
+                        <td className="py-3 px-3 hidden md:table-cell">{r.final_profile?.address || "N/A"}</td>
+                        <td className="py-3 px-3">
                           <span
-                            className={`px-3 py-1 text-xs font-bold rounded-full ${
-                              r.confidence_score >= 0.7
-                                ? Dark
-                                  ? "bg-green-600 text-green-100"
-                                  : "bg-green-100 text-green-800"
-                                : r.confidence_score >= 0.4
-                                ? Dark
-                                  ? "bg-yellow-600 text-yellow-100"
-                                  : "bg-yellow-100 text-yellow-800"
-                                : Dark
-                                ? "bg-red-600 text-red-100"
-                                : "bg-red-100 text-red-800"
-                            }`}
+                            className={`px-3 py-1 text-xs font-bold rounded-full ${r.confidence_score >= 0.7 ? (Dark ? "bg-green-600 text-green-100" : "bg-green-100 text-green-800") : r.confidence_score >= 0.4 ? (Dark ? "bg-yellow-600 text-yellow-100" : "bg-yellow-100 text-yellow-800") : (Dark ? "bg-red-600 text-red-100" : "bg-red-100 text-red-800")}`}
                           >
                             {(r.confidence_score * 100).toFixed(0)}%
                           </span>
