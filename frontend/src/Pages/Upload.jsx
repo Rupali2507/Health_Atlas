@@ -182,7 +182,6 @@ const Upload = () => {
     }
   };
 
-  // --- Styles ---
   const bgMain = Dark ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-900";
   const cardBg = Dark
     ? "bg-gray-800 border-gray-700"
