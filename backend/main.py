@@ -13,7 +13,7 @@ from tools import parse_provider_pdf
 app = FastAPI(title="Health Atlas Provider Validator")
 
 origins = [
-    "https://health-atlas-alpha.vercel.app",  # Your deployed Vercel frontend
+    "https://health-atlas.vercel.app",  # Your deployed Vercel frontend
     "http://localhost:5173",                   # Local development
 ]
 
