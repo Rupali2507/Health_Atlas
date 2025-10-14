@@ -2,6 +2,8 @@ import React, { useState, useRef, useMemo } from "react";
 import Sidebar from "../Components/Sidebar";
 import Navbar_III from "../Components/Navbar_III";
 import { useHealthContext } from "../Context/HealthContext";
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable'; // Explicitly import the function
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -11,7 +13,7 @@ const FiUploadCloud = ({ Dark }) => (
     xmlns="http://www.w3.org/2000/svg"
     className={`w-10 h-10 ${Dark ? "text-gray-300" : "text-gray-400"}`}
     fill="none"
-    viewBox="0 0 24 24"
+    viewBox="0 0 24"
     stroke="currentColor"
     strokeWidth="2"
   >
@@ -221,7 +223,7 @@ const Upload = () => {
 
           {isFinished && (
             <div className={`border rounded-2xl p-5 sm:p-8 shadow-sm ${cardBg}`}>
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex flex-between items-center mb-4 justify-between w-full">
                 <h2 className={`text-lg font-semibold flex items-center`}>
                   <FiCheckCircle Dark={Dark} />
                   Validation Complete
