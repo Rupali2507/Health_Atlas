@@ -164,6 +164,33 @@ const Upload = () => {
     setSortConfig({ key, direction });
   };
 
+  const handleDownloadPdf = () => {
+    const doc = new jsPDF();
+    doc.text("Provider Validation Report", 14, 15);
+    const tableColumn = ["Provider Name", "Member Count", "Priority Score", "Confidence", "Status"];
+    const tableRows = [];
+
+    sortedResults.forEach(item => {
+      const confidencePercent = (item.confidence_score * 100).toFixed(0) + '%';
+      const status = item.confidence_score < 0.7 ? "Flagged" : "Validated";
+      const providerData = [
+        item.final_profile?.provider_name || item.original_data?.full_name,
+        item.original_data?.member_count || 'N/A',
+        item.priority_score.toFixed(2),
+        confidencePercent,
+        status
+      ];
+      tableRows.push(providerData);
+    });
+
+    autoTable(doc, { // Call the imported function directly
+    head: [tableColumn],
+    body: tableRows,
+    startY: 20,
+});
+    doc.save('provider_validation_report.pdf');
+  };
+
   let summaryData = null;
   if (isFinished && results.length > 0) {
     const total = results.length;
@@ -199,7 +226,12 @@ const Upload = () => {
           {!isFinished && (
             <div className={`border rounded-2xl p-5 sm:p-8 shadow-sm mb-6 ${cardBg}`}>
               <h2 className={`text-lg font-semibold mb-2 ${textSecondary}`}>Upload Provider Data</h2>
-              <div className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-xl cursor-pointer ${Dark ? "border-purple-500 bg-gray-700 hover:bg-gray-600" : "border-purple-300 bg-gray-50 hover:bg-gray-100"}`} onClick={handleLabelClick} onDrop={handleDrop} onDragOver={handleDragOver}>
+              <div
+                className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-xl cursor-pointer ${Dark ? "border-purple-500 bg-gray-700 hover:bg-gray-600" : "border-purple-300 bg-gray-50 hover:bg-gray-100"}`}
+                onClick={handleLabelClick}
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+              >
                 <FiUploadCloud Dark={Dark} />
                 <span className={`font-medium ${textSecondary}`}>Click to upload or drag and drop</span>
                 <span className="text-xs text-gray-400">CSV or PDF (max. 50MB)</span>
@@ -228,7 +260,14 @@ const Upload = () => {
                   <FiCheckCircle Dark={Dark} />
                   Validation Complete
                 </h2>
-                <button onClick={handleClear} className={`py-2 px-4 rounded-lg ${resetBtn}`}>Start New Validation</button>
+                <div className="flex gap-2">
+                  <button onClick={handleDownloadPdf} className={`py-2 px-4 rounded-lg ${buttonBg}`}>
+                    Download PDF
+                  </button>
+                  <button onClick={handleClear} className={`py-2 px-4 rounded-lg ${resetBtn}`}>
+                    Start New Validation
+                  </button>
+                </div>
               </div>
 
               {summaryData && (
