@@ -96,7 +96,7 @@ Before you begin, ensure you have the following installed:
 ### ⚙️ 1. Clone the Repository
 
 ```bash
-git clone https://github.com/muskan-khushi/Health_Atlas
+git clone https://github.com/Rupali_2507/Health_Atlas
 cd Health_Atlas
 ```
 
