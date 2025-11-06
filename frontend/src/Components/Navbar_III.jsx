@@ -10,7 +10,10 @@ const Navbar_III = () => {
   const { Dark, setDark } = useHealthContext();
   const navigate = useNavigate();
 
-  const handleLogout = () => navigate("/login");
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    navigate("/login");
+  };
 
   const toggleDarkMode = () => setDark(!Dark);
 
