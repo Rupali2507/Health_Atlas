@@ -5,7 +5,13 @@ import Sidebar from "../Components/Sidebar";
 import { useHealthContext } from "../Context/HealthContext";
 
 const Dashboard = () => {
-  const { validationRuns, Dark } = useHealthContext();
+  const { validationRuns, Dark, navigate } = useHealthContext();
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token || token === "undefined" || token === "null") {
+      navigate("/signin");
+    }
+  }, [navigate]);
 
   // --- METRIC CALCULATIONS ---
   const allResults = validationRuns.flatMap((run) => run.results);
