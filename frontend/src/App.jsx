@@ -1,22 +1,17 @@
-import React from "react";
-import { Routes, Route } from "react-router-dom";
-import Home from "./Pages/Home";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Signin from "./Pages/Signin";
-import SignUp from "./Pages/SignUp";
+import Signup from "./Pages/Signup";
 import Dashboard from "./Pages/Dashboard";
-import Upload from "./Pages/Upload";
-import Provider from "./Pages/Provider";
-import ProviderDetail from "./Pages/ProviderDetail";
-import Apply from "./Pages/Apply";
-import ProtectedRoute from "./Pages/ProtectedRoute";
+import ProtectedRoute from "./Components/ProtectedRoute";
 
-const App = () => {
+function App() {
   return (
-    <div>
+    <Router>
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Signin />} />
-        <Route path="/signUp" element={<SignUp />} />
+        <Route path="/signin" element={<Signin />} />
+        <Route path="/signup" element={<Signup />} />
+
+        {/* ✅ Protected Route */}
         <Route
           path="/dashboard"
           element={
@@ -26,13 +21,11 @@ const App = () => {
           }
         />
 
-        <Route path="/upload" element={<Upload />} />
-        <Route path="/provider" element={<Provider />} />
-        <Route path="/provider-detail" element={<ProviderDetail />} />
-        <Route path="/new-user" element={<Apply />} />
+        {/* optional fallback */}
+        <Route path="*" element={<Signin />} />
       </Routes>
-    </div>
+    </Router>
   );
-};
+}
 
 export default App;
