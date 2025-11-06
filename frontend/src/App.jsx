@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Signin from "./Pages/Signin";
-import Signup from "./Pages/SignUp";
+import SignUp from "./Pages/SignUp";
 import Dashboard from "./Pages/Dashboard";
 import ProtectedRoute from "./Components/ProtectedRoute";
 
@@ -9,7 +9,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/signin" element={<Signin />} />
-        <Route path="/signup" element={<Signup />} />
+        <Route path="/signup" element={<SignUp />} />
 
         {/* ✅ Protected Route */}
         <Route
