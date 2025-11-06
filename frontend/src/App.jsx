@@ -8,6 +8,7 @@ import Upload from "./Pages/Upload";
 import Provider from "./Pages/Provider";
 import ProviderDetail from "./Pages/ProviderDetail";
 import Apply from "./Pages/Apply";
+import ProtectedRoute from "./Pages/ProtectedRoute";
 
 const App = () => {
   return (
@@ -16,7 +17,15 @@ const App = () => {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Signin />} />
         <Route path="/signUp" element={<SignUp />} />
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+
         <Route path="/upload" element={<Upload />} />
         <Route path="/provider" element={<Provider />} />
         <Route path="/provider-detail" element={<ProviderDetail />} />
