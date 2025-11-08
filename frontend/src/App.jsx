@@ -33,7 +33,7 @@ const App = () => {
 
   return (
     <div>
-      <GlobalLoader />
+      {/* <GlobalLoader /> */}
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Signin />} />
