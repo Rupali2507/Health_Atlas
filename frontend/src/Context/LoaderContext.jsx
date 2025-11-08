@@ -6,7 +6,9 @@ export const LoaderProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("Loading...");
 
-  const showLoader = (msg = "Loading...") => {
+  const showLoader = (
+    msg = "Our backend is on Render free-tier. It may take a few seconds to wake up. Thanks for your patience!"
+  ) => {
     setMessage(msg);
     setLoading(true);
   };
