@@ -19,7 +19,10 @@ const Signin = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    showLoader("Logging in..."); // show loader
+    showLoader(
+      "Logging in... (Our backend is on Render free-tier — it may take a few seconds to wake up. Thanks for your patience!)"
+    );
+
     try {
       const response = await fetch(
         "https://health-atlas-2.onrender.com/api/auth/signin",

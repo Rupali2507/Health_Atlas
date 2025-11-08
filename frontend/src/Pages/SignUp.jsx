@@ -34,7 +34,9 @@ const SignUp = () => {
       return;
     }
 
-    showLoader("Signing up..."); // show loader
+    showLoader(
+      "Signing in... (Our backend is on Render free-tier — it may take a few seconds to wake up. Thanks for your patience!)"
+    );
 
     try {
       const response = await fetch(
