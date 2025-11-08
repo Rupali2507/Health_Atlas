@@ -1,13 +1,14 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useHealthContext } from "../Context/HealthContext";
-import { useLoaderContext } from "../Context/LoaderContext"; // ✅ Import loader context
+import { useLoaderContext } from "../Context/LoaderContext"; // ✅ Loader
 import Navbar from "../Components/Navbar";
 import { useNavigate } from "react-router-dom";
 
 const SignUp = () => {
   const { Dark } = useHealthContext();
-  const { loading, setLoading } = useLoaderContext(); // ✅ Access global loader
+  const { loading, message, showLoader, hideLoader } = useLoaderContext();
   const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -26,12 +27,14 @@ const SignUp = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (formData.password !== formData.confirmPassword) {
       alert("Passwords do not match!");
       return;
     }
 
-    setLoading(true); // ✅ Start loader
+    showLoader("Signing up..."); // show loader
+
     try {
       const response = await fetch(
         "https://health-atlas-2.onrender.com/api/auth/signup",
@@ -43,7 +46,6 @@ const SignUp = () => {
             email: formData.email,
             password: formData.password,
           }),
-          credentials: "include",
         }
       );
 
@@ -57,7 +59,7 @@ const SignUp = () => {
       console.error(err);
       alert(err.message || "Error signing up");
     } finally {
-      setLoading(false); // ✅ Stop loader
+      hideLoader(); // hide loader
     }
   };
 
@@ -69,10 +71,13 @@ const SignUp = () => {
     >
       <Navbar />
 
-      {/* ✅ Loader Overlay */}
+      {/* Loader Overlay */}
       {loading && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm z-50">
-          <div className="w-16 h-16 border-4 border-t-transparent border-white rounded-full animate-spin"></div>
+          <div className="text-white flex flex-col items-center gap-4">
+            <div className="w-16 h-16 border-4 border-t-transparent border-white rounded-full animate-spin"></div>
+            <span>{message}</span>
+          </div>
         </div>
       )}
 
@@ -98,7 +103,6 @@ const SignUp = () => {
               }`}
               required
             />
-
             <input
               type="email"
               name="email"
@@ -112,7 +116,6 @@ const SignUp = () => {
               }`}
               required
             />
-
             <input
               type="password"
               name="password"
@@ -126,7 +129,6 @@ const SignUp = () => {
               }`}
               required
             />
-
             <input
               type="password"
               name="confirmPassword"
@@ -143,14 +145,12 @@ const SignUp = () => {
 
             <button
               type="submit"
-              disabled={loading} // ✅ Disable button while loading
-              className={`py-3 rounded-lg font-semibold text-white transition-all duration-150 ${
-                loading
-                  ? "bg-blue-400 cursor-not-allowed"
-                  : "bg-blue-900 hover:bg-blue-800"
+              disabled={loading}
+              className={`bg-blue-900 text-white py-3 rounded-lg font-semibold hover:bg-blue-800 transition ${
+                loading ? "cursor-not-allowed opacity-70" : ""
               }`}
             >
-              {loading ? "Creating Account..." : "Sign Up"}
+              {loading ? "Signing up..." : "Sign Up"}
             </button>
           </form>
 

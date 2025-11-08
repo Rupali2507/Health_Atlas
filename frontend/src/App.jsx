@@ -11,6 +11,7 @@ import Apply from "./Pages/Apply";
 import ProtectedRoute from "./Components/ProtectedRoute";
 import GlobalLoader from "./Components/GlobalLoader";
 import { useLoaderContext } from "./Context/LoaderContext";
+import { useEffect } from "react";
 
 const App = () => {
   const { setLoading } = useLoaderContext();
