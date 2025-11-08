@@ -6,11 +6,11 @@ import { HealthProvider } from "./Context/HealthContext.jsx";
 import { LoaderProvider } from "./Context/LoaderContext.jsx";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
-  <LoaderProvider>
-    <BrowserRouter>
+  <BrowserRouter>
+    <LoaderProvider>
       <HealthProvider>
         <App />
       </HealthProvider>
-    </BrowserRouter>
-  </LoaderProvider>
+    </LoaderProvider>
+  </BrowserRouter>
 );
