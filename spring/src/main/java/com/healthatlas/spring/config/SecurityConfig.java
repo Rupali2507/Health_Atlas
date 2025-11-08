@@ -34,6 +34,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/dashboard").authenticated()
+                .requestMatchers("/api/upload").authenticated()
+                .requestMatchers("/api/provider").authenticated()
+                .requestMatchers("/api/new-user").authenticated()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
