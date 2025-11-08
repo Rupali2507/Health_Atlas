@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useHealthContext } from "../Context/HealthContext";
-import { useLoaderContext } from "../Context/LoaderContext"; // ✅ Import loader context
-import assets from "../assets/assets";
+import { useLoaderContext } from "../Context/LoaderContext"; // ✅ Correct import
 import Navbar from "../Components/Navbar";
 import { useNavigate } from "react-router-dom";
 
 const Signin = () => {
   const { Dark } = useHealthContext();
-  const { loading, setLoading } = useLoaderContext(); // ✅ Access loader state
+  const { loading, message, showLoader, hideLoader } = useLoaderContext();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -19,7 +18,7 @@ const Signin = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true); // ✅ Start loader
+    showLoader("Logging in..."); // show loader
     try {
       const response = await fetch(
         "https://health-atlas-2.onrender.com/api/auth/signin",
@@ -30,18 +29,17 @@ const Signin = () => {
         }
       );
 
-      if (!response.ok) throw new Error("Login failed");
+      if (!response.ok) throw new Error("Invalid credentials");
 
       const data = await response.json();
       localStorage.setItem("token", data.token);
       console.log("User:", data.user);
-
       navigate("/dashboard");
     } catch (err) {
       console.error(err);
-      alert("Invalid credentials!");
+      alert(err.message || "Login failed");
     } finally {
-      setLoading(false); // ✅ Stop loader in all cases
+      hideLoader(); // hide loader
     }
   };
 
@@ -53,10 +51,13 @@ const Signin = () => {
     >
       <Navbar />
 
-      {/* ✅ Full-screen loader overlay */}
+      {/* Loader Overlay */}
       {loading && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm z-50">
-          <div className="w-16 h-16 border-4 border-t-transparent border-white rounded-full animate-spin"></div>
+          <div className="text-white flex flex-col items-center gap-4">
+            <div className="w-16 h-16 border-4 border-t-transparent border-white rounded-full animate-spin"></div>
+            <span>{message}</span>
+          </div>
         </div>
       )}
 
@@ -65,7 +66,7 @@ const Signin = () => {
           className={`w-full max-w-md p-8 rounded-2xl shadow-lg transition-colors duration-500 ${
             Dark
               ? "bg-gray-800 text-gray-200 border border-gray-700"
-              : "bg-white text-gray-900 border-gray-200"
+              : "bg-white text-gray-900 border border-gray-200"
           }`}
         >
           <h2 className="text-2xl font-bold text-center mb-6">Login</h2>
@@ -120,12 +121,8 @@ const Signin = () => {
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading} // ✅ Disable button during load
-              className={`mt-4 w-full py-3 rounded-2xl font-semibold text-white transition-all duration-150 ${
-                loading
-                  ? "bg-blue-400 cursor-not-allowed"
-                  : "bg-blue-800 hover:bg-blue-900 active:scale-95"
-              }`}
+              className="mt-4 w-full py-3 rounded-2xl bg-blue-800 text-white font-semibold hover:bg-blue-900 active:scale-95 transition-transform duration-150"
+              disabled={loading} // disable button while loading
             >
               {loading ? "Logging in..." : "Login"}
             </button>
