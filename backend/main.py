@@ -22,7 +22,7 @@ app.add_middleware(
 )
 
 # Configuration for parallel processing
-MAX_CONCURRENT_WORKERS = 5  
+MAX_CONCURRENT_WORKERS = 2
 
 
 @app.post("/validate-file")
