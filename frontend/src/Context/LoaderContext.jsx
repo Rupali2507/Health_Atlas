@@ -22,4 +22,7 @@ export const LoaderProvider = ({ children }) => {
   );
 };
 
-export const useLoaderContext = () => useContext(LoaderContext);
+// ✅ Named export matches your import
+export function useLoaderContext() {
+  return useContext(LoaderContext);
+}
