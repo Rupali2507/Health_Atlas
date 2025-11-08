@@ -22,7 +22,7 @@ app.add_middleware(
 )
 
 # Configuration for parallel processing
-MAX_CONCURRENT_WORKERS = 10  # Adjust based on your API rate limits
+MAX_CONCURRENT_WORKERS = 2
 
 
 @app.post("/validate-file")
