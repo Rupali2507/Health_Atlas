@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { useHealthContext } from "../Context/HealthContext";
+import { useLoaderContext } from "../Context/LoaderContext"; // ✅ Import loader context
 import Navbar from "../Components/Navbar";
 import { useNavigate } from "react-router-dom";
 
 const SignUp = () => {
   const { Dark } = useHealthContext();
+  const { loading, setLoading } = useLoaderContext(); // ✅ Access global loader
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: "",
@@ -29,7 +31,7 @@ const SignUp = () => {
       return;
     }
 
-    // setLoading(true);
+    setLoading(true); // ✅ Start loader
     try {
       const response = await fetch(
         "https://health-atlas-2.onrender.com/api/auth/signup",
@@ -55,7 +57,7 @@ const SignUp = () => {
       console.error(err);
       alert(err.message || "Error signing up");
     } finally {
-      // setLoading(false);
+      setLoading(false); // ✅ Stop loader
     }
   };
 
@@ -66,6 +68,14 @@ const SignUp = () => {
       }`}
     >
       <Navbar />
+
+      {/* ✅ Loader Overlay */}
+      {loading && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm z-50">
+          <div className="w-16 h-16 border-4 border-t-transparent border-white rounded-full animate-spin"></div>
+        </div>
+      )}
+
       <div className="flex items-center justify-center px-4 pt-20">
         <div
           className={`p-8 rounded-xl shadow-md w-full max-w-md transition-colors duration-500 ${
@@ -133,9 +143,14 @@ const SignUp = () => {
 
             <button
               type="submit"
-              className="bg-blue-900 text-white py-3 rounded-lg font-semibold hover:bg-blue-800 transition"
+              disabled={loading} // ✅ Disable button while loading
+              className={`py-3 rounded-lg font-semibold text-white transition-all duration-150 ${
+                loading
+                  ? "bg-blue-400 cursor-not-allowed"
+                  : "bg-blue-900 hover:bg-blue-800"
+              }`}
             >
-              Sign Up
+              {loading ? "Creating Account..." : "Sign Up"}
             </button>
           </form>
 
