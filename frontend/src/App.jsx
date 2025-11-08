@@ -17,9 +17,7 @@ const App = () => {
 
   useEffect(() => {
     const wakeServer = async () => {
-      showLoader(
-        "Our backend is on Render free-tier. It may take 30–60 seconds to wake up ⏳"
-      );
+      showLoader("Loading... ");
       try {
         await fetch("https://health-atlas-2.onrender.com/api/health");
         console.log(" Backend awake!");
