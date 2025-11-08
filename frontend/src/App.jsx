@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import Home from "./Pages/Home";
 import Signin from "./Pages/Signin";
@@ -11,26 +11,28 @@ import Apply from "./Pages/Apply";
 import ProtectedRoute from "./Components/ProtectedRoute";
 import GlobalLoader from "./Components/GlobalLoader";
 import { useLoaderContext } from "./Context/LoaderContext";
-import { useEffect } from "react";
 
 const App = () => {
-  const { setLoading } = useLoaderContext();
+  const { showLoader, hideLoader } = useLoaderContext();
 
   useEffect(() => {
     const wakeServer = async () => {
-      setLoading(true);
+      showLoader(
+        "Our backend is on Render free-tier. It may take 30–60 seconds to wake up ⏳"
+      );
       try {
         await fetch("https://health-atlas-2.onrender.com/api/health");
         console.log(" Backend awake!");
       } catch (err) {
         console.error(" Backend wake-up failed:", err);
       } finally {
-        setLoading(false);
+        hideLoader();
       }
     };
 
     wakeServer();
   }, []);
+
   return (
     <div>
       <GlobalLoader />
@@ -54,7 +56,6 @@ const App = () => {
             </ProtectedRoute>
           }
         />
-
         <Route path="/provider" element={<Provider />} />
         <Route path="/provider-detail" element={<ProviderDetail />} />
         <Route path="/new-user" element={<Apply />} />
