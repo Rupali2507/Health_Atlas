@@ -2,6 +2,7 @@
   "files.associations": {
     "*.ejs": "html",
     "*.scss": "css",
-    "SRTF.C": "cpp"
+    "SRTF.C": "cpp",
+    "producer_consumer.C": "cpp"
   }
 }

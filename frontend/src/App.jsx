@@ -9,10 +9,30 @@ import Provider from "./Pages/Provider";
 import ProviderDetail from "./Pages/ProviderDetail";
 import Apply from "./Pages/Apply";
 import ProtectedRoute from "./Components/ProtectedRoute";
+import GlobalLoader from "./Components/GlobalLoader";
+import { useLoaderContext } from "./Context/LoaderContext";
 
 const App = () => {
+  const { setLoading } = useLoaderContext();
+
+  useEffect(() => {
+    const wakeServer = async () => {
+      setLoading(true);
+      try {
+        await fetch("https://health-atlas-2.onrender.com/api/health");
+        console.log(" Backend awake!");
+      } catch (err) {
+        console.error(" Backend wake-up failed:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    wakeServer();
+  }, []);
   return (
     <div>
+      <GlobalLoader />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Signin />} />
@@ -25,8 +45,15 @@ const App = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/upload"
+          element={
+            <ProtectedRoute>
+              <Upload />
+            </ProtectedRoute>
+          }
+        />
 
-        <Route path="/upload" element={<Upload />} />
         <Route path="/provider" element={<Provider />} />
         <Route path="/provider-detail" element={<ProviderDetail />} />
         <Route path="/new-user" element={<Apply />} />
