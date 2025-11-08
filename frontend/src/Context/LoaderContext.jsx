@@ -1,4 +1,3 @@
-// src/Context/LoaderContext.jsx
 import React, { createContext, useContext, useState } from "react";
 
 const LoaderContext = createContext();
@@ -23,4 +22,4 @@ export const LoaderProvider = ({ children }) => {
   );
 };
 
-export const useLoader = () => useContext(LoaderContext);
+export const useLoaderContext = () => useContext(LoaderContext);
