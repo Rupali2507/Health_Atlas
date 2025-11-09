@@ -55,7 +55,7 @@ const Signin = () => {
     >
       <Navbar />
 
-      {/* Loader Overlay */}
+      {/* Loader Overlay
       {loading && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm z-50">
           <div className="text-white flex flex-col items-center gap-4">
@@ -63,7 +63,7 @@ const Signin = () => {
             <span>{message}</span>
           </div>
         </div>
-      )}
+      )} */}
 
       <div className="flex items-center justify-center px-4 w-full">
         <div
