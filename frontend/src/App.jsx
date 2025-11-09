@@ -9,28 +9,15 @@ import Provider from "./Pages/Provider";
 import ProviderDetail from "./Pages/ProviderDetail";
 import Apply from "./Pages/Apply";
 import ProtectedRoute from "./Components/ProtectedRoute";
-import GlobalLoader from "./Components/GlobalLoader";
-import { useLoaderContext } from "./Context/LoaderContext";
 
 const App = () => {
-  const { showLoader, hideLoader } = useLoaderContext();
-
   useEffect(() => {
-    const wakeServer = async () => {
-      showLoader("Loading... ");
-      try {
-        await fetch("https://health-atlas-2.onrender.com/api/health");
-        console.log(" Backend awake!");
-        // await fetch("https://health-atlas-backend.onrender.com");
-        // console.log("validation backend awake!!");
-      } catch (err) {
-        console.error(" Backend wake-up failed:", err);
-      } finally {
-        hideLoader();
-      }
-    };
-
-    wakeServer();
+    Promise.allSettled([
+      fetch("https://health-atlas-2.onrender.com/api/health").catch(() => {}),
+      fetch("https://health-atlas-backend.onrender.com/api/health").catch(
+        () => {}
+      ),
+    ]).then(() => console.log("Servers warmed up"));
   }, []);
 
   return (
