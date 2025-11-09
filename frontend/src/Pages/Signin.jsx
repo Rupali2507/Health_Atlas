@@ -35,12 +35,11 @@ const Signin = () => {
       );
 
       const data = await response.json(); // always parse before throwing
-
+      console.log(data);
       if (!response.ok) {
         throw new Error(data.message || "Invalid credentials");
       }
 
-      // ✅ Save user info safely
       localStorage.setItem("token", data.token);
       localStorage.setItem("name", data.user?.name || data.name || "User");
 
