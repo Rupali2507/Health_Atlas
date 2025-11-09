@@ -37,7 +37,7 @@ const Signin = () => {
 
       const data = await response.json();
       localStorage.setItem("token", data.token);
-      localStorage.setItem("user", data.name);
+      localStorage.setItem("name", data.name);
 
       console.log("User:", data.name);
       navigate("/dashboard");

@@ -55,7 +55,12 @@ const SignUp = () => {
       const data = await response.json();
 
       if (!response.ok) throw new Error(data.message || "Signup failed");
-      localStorage.setItem("name", formData.name);
+      if (data.user?.name) {
+        localStorage.setItem("name", data.user.name);
+      } else {
+        localStorage.setItem("name", formData.name);
+      }
+      console.log(localStorage.getItem("name"));
       alert(data.message || "Signup successful! Please login.");
       navigate("/login");
     } catch (err) {
