@@ -16,7 +16,7 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = {"https://health-atlas.vercel.app", "http://localhost:5173"}) // React frontend
+@CrossOrigin(origins = {"https://health-atlas.vercel.app", "http://localhost:5173", "http://127.0.0.1:8000"}) // React frontend
 public class AuthController {
     private final AuthService authService;
 
