@@ -338,18 +338,15 @@ Health Atlas agents are powered by specialized tools that handle distinct valida
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
-# Health Atlas - Final KPI Results
-
-This document contains the final key performance indicator (KPI) results from a stable, live test run conducted on a dataset of 105 provider records.
 
 ## Final KPI Summary
 
 The system successfully processed all valid records and produced the following final summary:
 ## Analysis of Results vs. Goals
-KPI	Goal	Result	Status
-Validation Accuracy	80%+	88.89%	✅ GOAL ACHIEVED
-Processing Speed	< 300 sec	~732 sec	⚠️ TARGET MISSED*
-Processing Throughput	500+/hr	517 providers/hr	✅ GOAL ACHIEVED
+- KPI	Goal	Result	Status
+- **Validation Accuracy**	80%+	88.89%	✅ GOAL ACHIEVED
+- **Processing Speed**	< 300 sec	~732 sec	⚠️ TARGET MISSED*
+- **Processing Throughput**	500+/hr	517 providers/hr	✅ GOAL ACHIEVED
 
 Note on Processing Speed: The 5-minute target was missed as a deliberate engineering trade-off for the demo. To guarantee a stable run without hitting API rate limits on the free tier, the number of parallel workers was set to 1. The throughput of 517 providers/hour proves the architecture is highly efficient and would easily beat the speed target with a production-level API key.
 
