@@ -37,7 +37,9 @@ const Signin = () => {
 
       const data = await response.json();
       localStorage.setItem("token", data.token);
-      console.log("User:", data.user);
+      localStorage.setItem("user", data.name);
+
+      console.log("User:", data.name);
       navigate("/dashboard");
     } catch (err) {
       console.error(err);
