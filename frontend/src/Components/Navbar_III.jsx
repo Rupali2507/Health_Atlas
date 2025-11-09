@@ -9,7 +9,7 @@ const Navbar_III = () => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const { Dark, setDark } = useHealthContext();
   const navigate = useNavigate();
-
+  const user = localStorage.getItem("name");
   const handleLogout = () => {
     localStorage.removeItem("token");
     navigate("/login");
@@ -29,7 +29,9 @@ const Navbar_III = () => {
         Dark ? "bg-gray-800 text-white" : "bg-white text-gray-900"
       }`}
     >
-      <div className="hidden lg:block font-medium text-lg">Hi User</div>
+      <div className="hidden lg:block font-medium text-lg">
+        Hi {user || "there"}
+      </div>
 
       {/* Search Input */}
       <div className="flex items-center relative w-[50vw] sm:w-[40vw] max-w-md">

@@ -19,6 +19,7 @@ const Signin = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     showLoader(
       "Logging in... (Our backend is on Render free-tier — it may take a few seconds to wake up. Thanks for your patience!)"
     );
@@ -33,17 +34,25 @@ const Signin = () => {
         }
       );
 
-      if (!response.ok) throw new Error("Invalid credentials");
+      const data = await response.json(); // always parse before throwing
 
-      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Invalid credentials");
+      }
+
+      // ✅ Save user info safely
       localStorage.setItem("token", data.token);
-      console.log("User:", data.user);
+      localStorage.setItem("name", data.user?.name || data.name || "User");
+
+      console.log("User:", localStorage.getItem("name"));
+
+      alert("Login successful!");
       navigate("/dashboard");
     } catch (err) {
       console.error(err);
       alert(err.message || "Login failed");
     } finally {
-      hideLoader(); // hide loader
+      hideLoader();
     }
   };
 
@@ -55,7 +64,7 @@ const Signin = () => {
     >
       <Navbar />
 
-      {/* Loader Overlay
+      {/* Loader Overlay */}
       {loading && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm z-50">
           <div className="text-white flex flex-col items-center gap-4">
@@ -63,7 +72,7 @@ const Signin = () => {
             <span>{message}</span>
           </div>
         </div>
-      )} */}
+      )}
 
       <div className="flex items-center justify-center px-4 w-full">
         <div
