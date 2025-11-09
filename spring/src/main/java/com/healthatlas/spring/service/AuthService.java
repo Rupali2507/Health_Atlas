@@ -32,7 +32,8 @@ public class AuthService {
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         userRepository.save(user);
 
-        return new AuthResponse(null, "User created successfully");
+        // Return the name along with success message
+        return new AuthResponse(null, "User created successfully", user.getName());
     }
 
     public AuthResponse signin(SignInRequest request) {
@@ -44,6 +45,8 @@ public class AuthService {
         }
 
         String token = jwtUtil.generateToken(user.getEmail());
-        return new AuthResponse(token, "Login successful");
+
+        // Include the user name in the response
+        return new AuthResponse(token, "Login successful", user.getName());
     }
 }
