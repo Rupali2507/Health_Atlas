@@ -21,8 +21,8 @@ const App = () => {
       try {
         await fetch("https://health-atlas-2.onrender.com/api/health");
         console.log(" Backend awake!");
-        await fetch("https://health-atlas-backend.onrender.com");
-        console.log("validation backend awake!!");
+        // await fetch("https://health-atlas-backend.onrender.com");
+        // console.log("validation backend awake!!");
       } catch (err) {
         console.error(" Backend wake-up failed:", err);
       } finally {
