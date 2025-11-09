@@ -40,7 +40,7 @@ const SignUp = () => {
 
     try {
       const response = await fetch(
-        "http://health-atlas-2.onrender.com/api/auth/signup",
+        "https://health-atlas-2.onrender.com/api/auth/signup",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
