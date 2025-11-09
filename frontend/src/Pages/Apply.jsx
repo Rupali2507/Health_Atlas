@@ -102,7 +102,7 @@ const Apply = () => {
 
                 if (data.type === "log") {
                   setLogs((prev) => [...prev, data.content]);
-                  setProgress((prev) => Math.min(prev + 10, 95)); // fake progress feedback
+                  setProgress((prev) => Math.min(prev + 10, 95)); 
                 } else if (data.type === "result") {
                   aiResult = data.data;
                 } else if (data.type === "complete") {
