@@ -19,6 +19,7 @@ const Signin = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     showLoader(
       "Logging in... (Our backend is on Render free-tier — it may take a few seconds to wake up. Thanks for your patience!)"
     );
@@ -33,19 +34,25 @@ const Signin = () => {
         }
       );
 
-      if (!response.ok) throw new Error("Invalid credentials");
+      const data = await response.json(); // always parse before throwing
 
-      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Invalid credentials");
+      }
+
+      // ✅ Save user info safely
       localStorage.setItem("token", data.token);
-      localStorage.setItem("name", data.name);
+      localStorage.setItem("name", data.user?.name || data.name || "User");
 
-      console.log("User:", data.name);
+      console.log("User:", localStorage.getItem("name"));
+
+      alert("Login successful!");
       navigate("/dashboard");
     } catch (err) {
       console.error(err);
       alert(err.message || "Login failed");
     } finally {
-      hideLoader(); // hide loader
+      hideLoader();
     }
   };
 
