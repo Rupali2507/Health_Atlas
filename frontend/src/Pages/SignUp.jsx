@@ -62,7 +62,7 @@ const SignUp = () => {
       }
       console.log(localStorage.getItem("name"));
       alert(data.message || "Signup successful! Please login.");
-      navigate("/login");
+      navigate("/dashboard");
     } catch (err) {
       console.error(err);
       alert(err.message || "Error signing up");
