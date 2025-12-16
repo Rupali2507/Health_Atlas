@@ -5,7 +5,7 @@ import { useHealthContext } from "../Context/HealthContext";
 import { Upload as UploadIcon } from "lucide-react";
 
 const API_AI = "https://health-atlas-backend.onrender.com";
-const API_DB = "https://health-atlas-2.onrender.com";
+const API_DB = "https://health-atlas-backend.onrender.com/api/providers/apply";
 
 const Apply = () => {
   const { Dark } = useHealthContext();
@@ -102,7 +102,7 @@ const Apply = () => {
 
                 if (data.type === "log") {
                   setLogs((prev) => [...prev, data.content]);
-                  setProgress((prev) => Math.min(prev + 10, 95)); 
+                  setProgress((prev) => Math.min(prev + 10, 95));
                 } else if (data.type === "result") {
                   aiResult = data.data;
                 } else if (data.type === "complete") {
