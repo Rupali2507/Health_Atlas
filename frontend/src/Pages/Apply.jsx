@@ -23,7 +23,6 @@ const Apply = () => {
     npiId: "",
     address: "",
   });
-
   const [logs, setLogs] = useState([]);
   const [progress, setProgress] = useState(0);
   const [isValidating, setIsValidating] = useState(false);
@@ -73,6 +72,7 @@ const Apply = () => {
         method: "POST",
         body: form,
       });
+
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const reader = response.body.getReader();
@@ -132,14 +132,22 @@ const Apply = () => {
     setLogs((prev) => [...prev, "Sending data to database..."]);
 
     const dbForm = new FormData();
-    Object.entries(formData).forEach(([key, value]) =>
-      dbForm.append(key, value)
+    dbForm.append("fullName", formData.name);
+    dbForm.append("email", formData.email);
+    dbForm.append("phoneNumber", formData.phone);
+    dbForm.append("speciality", formData.specialty);
+    dbForm.append("licenseNumber", formData.licenseNumber);
+    dbForm.append("npiId", formData.npiId);
+    dbForm.append("practiceAddress", formData.address);
+    dbForm.append("aiRawResult", JSON.stringify(aiResult.raw || aiResult));
+    dbForm.append(
+      "aiParsedResult",
+      JSON.stringify(aiResult.parsed || aiResult)
     );
     dbForm.append("file", file);
-    dbForm.append("aiValidation", JSON.stringify(aiResult));
 
     try {
-      const res = await fetch(`${API_DB}/api/providers/apply`, {
+      const res = await fetch(API_DB, {
         method: "POST",
         body: dbForm,
       });
@@ -169,6 +177,15 @@ const Apply = () => {
     setIsValidating(false);
     setIsComplete(false);
     setSubmitStatus(null);
+    setFormData({
+      name: "",
+      email: "",
+      phone: "",
+      specialty: "",
+      licenseNumber: "",
+      npiId: "",
+      address: "",
+    });
   };
 
   return (
@@ -188,7 +205,7 @@ const Apply = () => {
               submission.
             </p>
 
-            {/* --- Provider Info --- */}
+            {/* Provider Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               {[
                 ["name", "Full Name", "Dr. John Doe"],
@@ -219,7 +236,7 @@ const Apply = () => {
               ))}
             </div>
 
-            {/* --- Address --- */}
+            {/* Address */}
             <label className="block mb-1 text-sm font-medium">
               Practice Address
             </label>
@@ -236,7 +253,7 @@ const Apply = () => {
               }`}
             />
 
-            {/* --- Upload --- */}
+            {/* Upload */}
             <h2 className="text-lg font-semibold mb-2">
               Upload Credential Document
             </h2>
@@ -261,7 +278,7 @@ const Apply = () => {
               </p>
             </div>
 
-            {/* --- Progress + Logs --- */}
+            {/* Progress + Logs */}
             {isValidating && (
               <div className="mt-6">
                 <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
@@ -283,7 +300,7 @@ const Apply = () => {
               </div>
             )}
 
-            {/* --- Actions --- */}
+            {/* Actions */}
             <div className="mt-8 text-center space-x-3">
               {!isComplete ? (
                 <button
