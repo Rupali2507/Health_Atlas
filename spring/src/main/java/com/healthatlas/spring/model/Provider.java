@@ -39,4 +39,16 @@ public class Provider {
     private String npiId;
 
     private String practiceAddress;
+
+    @Column(columnDefinition = "TEXT")
+    private String aiRawResult;     // full AI JSON as String
+
+    @Column(columnDefinition = "TEXT")
+    private String aiParsedResult;  // extracted / cleaned result
+
+    // 🔽 FILE STORAGE
+
+    @Column(columnDefinition = "TEXT")
+    private String credentialFilePath;
+
 }
