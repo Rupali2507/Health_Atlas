@@ -13,8 +13,8 @@ import ProtectedRoute from "./Components/ProtectedRoute";
 const App = () => {
   useEffect(() => {
     Promise.allSettled([
-      fetch("https://health-atlas-2.onrender.com/api/health").catch(() => {}),
-      fetch("https://health-atlas-backend.onrender.com/api/health").catch(
+      fetch("http://localhost:8080/api/health").catch(() => {}),
+      fetch("http://localhost:8000/api/health").catch(
         () => {}
       ),
     ]).then(() => console.log("Servers warmed up"));
