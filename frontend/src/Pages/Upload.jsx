@@ -5,7 +5,7 @@ import { useHealthContext } from "../Context/HealthContext";
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable'; // Explicitly import the function
 
-const API_URL = import.meta.env.VITE_API_URL || "https://health-atlas-backend.onrender.com";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // --- SVG Icons ---
 const FiUploadCloud = ({ Dark }) => (
