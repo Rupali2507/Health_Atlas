@@ -30,10 +30,17 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/dashboard").authenticated()
-                        .anyRequest().authenticated())
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                // public endpoints
+                .requestMatchers(
+                        "/api/auth/**",
+                        "/api/health"
+                ).permitAll()
+                // protected endpoints
+                .requestMatchers("/api/dashboard").authenticated()
+                // everything else
+                .anyRequest().authenticated()
+                )
                 .addFilterBefore(jwtAuthFilter,
                         org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
 
