@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # -----------------------------
+  # Service 1: MySQL Database
+  # -----------------------------
+  mysql_db:
+    image: mysql:8.0
+    container_name: health_atlas_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: health_atlas_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3307:3306" # Maps container 3306 to localhost 3307 (avoids conflict if you have local MySQL)
+    volumes:
+      - mysql_data:/var/lib/mysql # Persists data even if you restart Docker
+    restart: always
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # -----------------------------
+  # Service 2: Auth Backend (Spring)
+  # -----------------------------
+  spring:
+    build: 
+      context: ./spring
+      dockerfile: Dockerfile
+    container_name: health_atlas_spring
+    ports:
+      - "8080:8080"
+    environment:
+      # Injecting the variables your application.properties asked for:
+      - DB_URL=jdbc:mysql://mysql_db:3306/health_atlas_db?allowPublicKeyRetrieval=true&useSSL=false
+      - DB_USERNAME=user
+      - DB_PASSWORD=password
+      - SERVER_PORT=8080
+    depends_on:
+      mysql_db:
+        condition: service_healthy # Waits until MySQL is actually ready to accept connections
+    restart: on-failure
+
+  # -----------------------------
+  # Service 3: AI Backend (Python)
+  # -----------------------------
+  backend:
+    build: ./backend
+    container_name: health_atlas_python
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    restart: always
+
+  # -----------------------------
+  # Service 4: Frontend (React)
+  # -----------------------------
+  frontend:
+    build: ./frontend
+    container_name: health_atlas_frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_AI_URL=http://localhost:8000
+      - VITE_AUTH_URL=http://localhost:8080
+    depends_on:
+      - backend
+      - spring
+    command: npm run dev -- --host
+
+volumes:
+  mysql_data:
