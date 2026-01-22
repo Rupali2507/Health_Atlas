@@ -4,8 +4,8 @@ import Navbar_III from "../Components/Navbar_III";
 import { useHealthContext } from "../Context/HealthContext";
 import { Upload as UploadIcon } from "lucide-react";
 
-const API_AI = "https://health-atlas-backend.onrender.com";
-const API_DB = "https://health-atlas-backend.onrender.com/api/providers/apply";
+const API_AI = "http://localhost:8000";
+const API_DB = "http://localhost:8000/api/providers/apply";
 
 const Apply = () => {
   const { Dark } = useHealthContext();
