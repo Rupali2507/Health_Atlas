@@ -18,6 +18,7 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/auth")
 @CrossOrigin(origins = {"https://health-atlas.vercel.app", "http://localhost:5173", "http://127.0.0.1:8000"}) // React frontend
 public class AuthController {
+
     private final AuthService authService;
 
     public AuthController(AuthService authService) {
@@ -28,7 +29,7 @@ public class AuthController {
     public ResponseEntity<AuthResponse> signup(@Valid @RequestBody SignUpRequest request) {
         return ResponseEntity.ok(authService.signup(request));
     }
-    
+
     @PostMapping("/signin")
     public ResponseEntity<AuthResponse> signin(@RequestBody SignInRequest request) {
         return ResponseEntity.ok(authService.signin(request));
