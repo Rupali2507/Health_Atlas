@@ -87,7 +87,9 @@ async def validate_file(file: UploadFile = File(...)):
                         "final_profile": final_result.get("final_profile"),
                         "confidence_score": final_result.get("confidence_score"),
                         "qa_flags": final_result.get("qa_flags", []),
-                        "priority_score": final_result.get("priority_score", 0)
+                        "priority_score": final_result.get("priority_score", 0),
+                        "quality_metrics": final_result.get("quality_metrics", {}),
+                        "execution_metadata": final_result.get("execution_metadata", {})
                     }
                     await result_queue.put(('result', result_payload))
                     
