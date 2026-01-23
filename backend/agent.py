@@ -249,41 +249,158 @@ OUTPUT (JSON only):"""
     }
 
 def confidence_scorer_node(state: AgentState) -> dict:
-    print("---PIPELINE STEP: SCORING---")
-    score = 0.0
-    log = []
-    
-    final_data = state.get("final_profile", {})
-    initial_data = state.get("initial_data", {})
-    
-    if not final_data.get("error"):
-        # NPI match
-        if final_data.get("npi_match_found"):
-            score += 0.5
-            log.append("Score +0.5 (NPI Match Found)")
-        
-        # Address validation
-        if "address_validation" in final_data:
-            address_validation = final_data.get("address_validation")
-            if isinstance(address_validation, dict):
-                verdict = address_validation.get("verdict")
-            else:
-                verdict = address_validation  # string fallback
-            if verdict == "High Confidence Match":
-                score += 0.3
-                log.append("Score +0.3 (Address: High Confidence)")
-            elif verdict and "match" in verdict.lower():
-                score += 0.15
-                log.append("Score +0.15 (Address: Partial Match)")
-        
-        # QA flags penalty
-        if state.get("qa_flags"):
-            score -= 0.2
-            log.append(f"Score -0.2 (QA Flags: {len(state['qa_flags'])})")
-    
-    final_score = max(0.0, min(1.0, score))
-    
-    return {"confidence_score": final_score, "log": log}
+    """
+    Advanced, production-grade confidence scoring.
+    Multi-dimensional, explainable, decay-aware, risk-sensitive.
+    SAFE for current pipeline.
+    """
+    print("---PIPELINE STEP: SCORING (ADVANCED)---")
+
+    final_data = state.get("final_profile", {}) or {}
+    initial_data = state.get("initial_data", {}) or {}
+    qa_flags = state.get("qa_flags", []) or []
+
+    logs = []
+    total_score = 0.0
+
+    # ===============================
+    # WEIGHT CONFIGURATION (sum = 1.0)
+    # ===============================
+    WEIGHTS = {
+        "identity": 0.30,
+        "address": 0.22,
+        "completeness": 0.18,
+        "freshness": 0.10,
+        "enrichment": 0.10,
+        "risk": 0.10
+    }
+
+    # ===============================
+    # 1️⃣ IDENTITY TRUST (NPI)
+    # ===============================
+    identity_raw = 1.0 if final_data.get("npi_match_found") else 0.0
+    logs.append(
+        "Identity ✔ NPI match" if identity_raw
+        else "Identity ✖ NPI not found"
+    )
+
+    total_score += identity_raw * WEIGHTS["identity"]
+
+    # ===============================
+    # 2️⃣ ADDRESS RELIABILITY
+    # ===============================
+    address_raw = 0.0
+
+    address_validation = (
+        final_data.get("address_validation")
+        or state.get("address_result")
+    )
+
+    verdict = None
+    if isinstance(address_validation, dict):
+        verdict = address_validation.get("verdict")
+    elif isinstance(address_validation, str):
+        verdict = address_validation
+
+    if verdict == "High Confidence Match":
+        address_raw = 1.0
+        logs.append("Address ✔ High confidence match")
+    elif verdict and "partial" in verdict.lower():
+        address_raw = 0.65
+        logs.append("Address ◐ Partial match")
+    elif verdict:
+        address_raw = 0.35
+        logs.append("Address ⚠ Weak/uncertain match")
+    else:
+        logs.append("Address ✖ No validation data")
+
+    total_score += address_raw * WEIGHTS["address"]
+
+    # ===============================
+    # 3️⃣ DATA COMPLETENESS
+    # ===============================
+    required_fields = [
+        "provider_name",
+        "npi",
+        "specialty",
+        "address",
+        "phone",
+        "website"
+    ]
+
+    present = sum(1 for f in required_fields if final_data.get(f))
+    completeness_ratio = present / len(required_fields)
+
+    logs.append(
+        f"Completeness ℹ {present}/{len(required_fields)} fields present"
+    )
+
+    total_score += completeness_ratio * WEIGHTS["completeness"]
+
+    # ===============================
+    # 4️⃣ DATA FRESHNESS (DECAY)
+    # ===============================
+    freshness_raw = 0.6
+    last_updated = initial_data.get("last_updated")
+
+    if last_updated:
+        try:
+            last_dt = datetime.datetime.strptime(last_updated, "%Y-%m-%d")
+            days_old = (datetime.datetime.utcnow() - last_dt).days
+            freshness_raw = pow(2.71828, -days_old / 365)
+            logs.append(
+                f"Freshness ⏳ {days_old} days old "
+                f"(decay={freshness_raw:.2f})"
+            )
+        except Exception:
+            logs.append("Freshness ⚠ Invalid date format")
+
+    total_score += freshness_raw * WEIGHTS["freshness"]
+
+    # ===============================
+    # 5️⃣ ENRICHMENT QUALITY
+    # ===============================
+    enrichment_raw = 0.0
+
+    if final_data.get("website"):
+        enrichment_raw += 0.4
+    if final_data.get("education"):
+        enrichment_raw += 0.3
+    if final_data.get("certifications"):
+        enrichment_raw += 0.3
+
+    enrichment_raw = min(1.0, enrichment_raw)
+
+    logs.append(f"Enrichment 🌐 score={enrichment_raw:.2f}")
+    total_score += enrichment_raw * WEIGHTS["enrichment"]
+
+    # ===============================
+    # 6️⃣ RISK & PENALTIES
+    # ===============================
+    risk_penalty = 0.0
+
+    if qa_flags:
+        penalty = min(0.15, 0.04 * len(qa_flags))
+        risk_penalty += penalty
+        logs.append(f"Risk ⚠ {len(qa_flags)} QA flags (-{penalty*100:.0f}%)")
+
+    if final_data.get("synthesis_status", "").startswith("fallback"):
+        risk_penalty += 0.10
+        logs.append("Risk ⚠ Fallback synthesis used (-10%)")
+
+    total_score += max(0.0, WEIGHTS["risk"] - risk_penalty)
+
+    # ===============================
+    # FINAL NORMALIZATION
+    # ===============================
+    final_score = round(max(0.0, min(1.0, total_score)), 3)
+    logs.append(f"FINAL CONFIDENCE = {final_score*100:.1f}%")
+
+    return {
+        "confidence_score": final_score,
+        "log": logs
+    }
+
 
 # --- GRAPH CONSTRUCTION ---
 workflow = StateGraph(AgentState)
