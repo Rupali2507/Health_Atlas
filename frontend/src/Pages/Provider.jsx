@@ -68,7 +68,11 @@ const Provider = () => {
 
   const handleProviderClick = (provider) => {
     setSelectedProvider(provider.fullResult);
-    navigate("/provider-detail");
+    
+    // We pass the data in the 'state' property
+    navigate("/provider-detail", { 
+      state: { selectedProvider: provider.fullResult } 
+    });
   };
 
   // --- Dynamic classes for dark mode ---
