@@ -140,24 +140,44 @@ const ProviderDetail = () => {
         </div>
         
         <div className="space-y-4">
-          {Object.entries(data).map(([key, value]) => {
-             if (typeof value === 'object' && value !== null) return null;
-             return (
-               <div key={key} className="group hover:bg-slate-50 dark:hover:bg-slate-800/30 p-2 rounded-lg transition-colors duration-200">
-                 <div className={`text-[11px] font-bold uppercase tracking-wider mb-1 ${labelColor} flex items-center gap-1`}>
-                   <div className="w-1 h-1 rounded-full bg-slate-400"></div>
-                   {key.replace(/_/g, " ")}
-                 </div>
-                 <div className={`font-medium ${primary ? "text-lg" : "text-sm"}`}>
-                    {primary 
-                        ? <AuditField fieldKey={key} value={value} originalData={originalData} qaFlags={qaFlags} />
-                        : <span className={valueColor}>{String(value)}</span>
-                    }
-                 </div>
-               </div>
-             )
-          })}
+  {typeof data === "string" ? (
+    <div className={`font-medium ${primary ? "text-lg" : "text-sm"} ${valueColor}`}>
+      {data}
+    </div>
+  ) : (
+    Object.entries(data).map(([key, value]) => {
+      if (typeof value === "object" && value !== null) return null;
+
+      return (
+        <div
+          key={key}
+          className="group hover:bg-slate-50 dark:hover:bg-slate-800/30 p-2 rounded-lg transition-colors duration-200"
+        >
+          <div
+            className={`text-[11px] font-bold uppercase tracking-wider mb-1 ${labelColor} flex items-center gap-1`}
+          >
+            <div className="w-1 h-1 rounded-full bg-slate-400"></div>
+            {key.replace(/_/g, " ")}
+          </div>
+
+          <div className={`font-medium ${primary ? "text-lg" : "text-sm"}`}>
+            {primary ? (
+              <AuditField
+                fieldKey={key}
+                value={value}
+                originalData={originalData}
+                qaFlags={qaFlags}
+              />
+            ) : (
+              <span className={valueColor}>{String(value)}</span>
+            )}
+          </div>
         </div>
+      );
+    })
+  )}
+</div>
+
       </div>
     );
   };
