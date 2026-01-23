@@ -10,6 +10,10 @@ from thefuzz import fuzz
 import time
 from tools import search_npi_registry, validate_address, scrape_provider_website
 from provider_requests import get_all_providers
+from logic_engine import SurgicalValidator
+import datetime
+
+validator = SurgicalValidator()
 
 load_dotenv()
 
@@ -20,8 +24,10 @@ class AgentState(TypedDict):
     address_result: dict
     enrichment_data: dict
     qa_flags: List[str]
+    qa_corrections: dict        
     final_profile: dict
     confidence_score: float
+
 
 llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
 
@@ -124,34 +130,53 @@ def enrichment_node(state: AgentState) -> dict:
 # agent.py
 
 def quality_assurance_node(state: AgentState) -> dict:
-    print("---AGENT ROLE: Quality Assurance---")
-    flags = []
-    
-    initial_data = state["initial_data"] # Get initial data
-    initial_address = initial_data.get("address", "").upper()
-    npi_addresses = state["npi_result"].get("addresses", [])
-    
-    # --- 1. Existing Address Mismatch Check ---
-    npi_loc_address = ""
-    for addr in npi_addresses:
-        if addr.get("address_purpose") == "LOCATION":
-            npi_loc_address = addr.get("address_1", "").upper()
-            break
-    
-    if npi_loc_address and fuzz.partial_ratio(initial_address, npi_loc_address) < 70:
-        flags.append(f"ADDRESS MISMATCH: Initial: '{initial_address}', NPI: '{npi_loc_address}'.")
-    
-    # --- 2. NEW: Mocked License Verification Check ---
-    license_number = initial_data.get("license_number", "").strip()
+    print("---AGENT ROLE: Quality Assurance (With Surgical Logic)---")
 
+    flags = []
+    corrections = {}
+
+    initial_data = state["initial_data"]
+
+    # --- 1. SURGICAL ADDRESS VALIDATION ---
+    input_address = initial_data.get("address", "")
+
+    npi_address = ""
+    for addr in state["npi_result"].get("addresses", []):
+        if addr.get("address_purpose") == "LOCATION":
+            npi_address = addr.get("address_1", "")
+            break
+
+    if npi_address:
+        validation_result = validator.compare_addresses(input_address, npi_address)
+
+        if validation_result["action"] == "AUTO_CORRECT":
+            corrections["address"] = validation_result["new_value"]
+            flags.append(f"AUTO-HEALED: {validation_result['reason']}")
+
+        elif validation_result["action"] == "FLAG":
+            flags.append(f"ADDRESS MISMATCH: {validation_result['reason']}")
+
+    # --- 2. DATA HEALTH ---
+    health_score = validator.calculate_data_health(
+        last_updated_date=initial_data.get("last_updated", "2024-01-01"),
+        source_type="CSV_UPLOAD",
+        provider_type=state["npi_result"].get("enumeration_type", "NPI-1"),
+    )
+
+    corrections["data_health"] = health_score
+
+    # --- 3. LICENSE CHECK ---
+    license_number = initial_data.get("license_number", "").strip()
     if not license_number:
-        # Flag if the license number is missing from the input data
-        flags.append("LICENSE ISSUE: Missing license number for verification.")
+        flags.append("LICENSE ISSUE: Missing license number.")
     elif "SUSPENDED" in license_number.upper():
-        # Flag if the mock check finds a suspended license
-        flags.append("LICENSE ISSUE: License status reported as SUSPENDED.")
-        
-    return {"qa_flags": flags}
+        flags.append("LICENSE ISSUE: License SUSPENDED.")
+
+    return {
+        "qa_flags": flags,
+        "qa_corrections": corrections
+    }
+
 
 def synthesis_node(state: AgentState) -> dict:
     """Creates the final, standardized provider profile with robust JSON parsing."""
@@ -187,6 +212,10 @@ OUTPUT (JSON only):"""
             final_json = extract_json_from_response(response.content)
             
             print(f"✅ Successfully synthesized profile with keys: {list(final_json.keys())}")
+            corrections = state.get("qa_corrections", {})
+            if corrections:
+                final_json.update(corrections)
+
             return {"final_profile": final_json}
             
         except json.JSONDecodeError as e:
@@ -263,8 +292,8 @@ workflow = StateGraph(AgentState)
 workflow.add_node("npi_tool", call_npi_tool)
 workflow.add_node("address_tool", call_address_tool)
 workflow.add_node("enrichment", enrichment_node)
-workflow.add_node("quality_assurance", quality_assurance_node)
 workflow.add_node("synthesis", synthesis_node)
+workflow.add_node("quality_assurance", quality_assurance_node)
 workflow.add_node("scorer", confidence_scorer_node)
 
 # Define flow
@@ -292,14 +321,19 @@ def run_agent_on_all_providers():
             "state": provider.get("state", ""),
             "zip_code": provider.get("zip_code", "")
         }
+
         initial_state: AgentState = {
             "initial_data": initial_data,
             "log": [],
             "npi_result": {},
             "address_result": {},
+            "enrichment_data": {},
+            "qa_flags": [],
+            "qa_corrections": {},   # ✅ ADD
             "final_profile": {},
             "confidence_score": 0.0
         }
+
         final_state = app.invoke(initial_state)
         results.append(final_state)
     return results
@@ -321,9 +355,13 @@ if __name__ == "__main__":
             "log": [],
             "npi_result": {},
             "address_result": {},
+            "enrichment_data": {},
+            "qa_flags": [],
+            "qa_corrections": {},   # ✅ ADD
             "final_profile": {},
             "confidence_score": 0.0
         }
+
         final_state = app.invoke(initial_state)
         print(final_state["final_profile"])
         print("Confidence:", final_state["confidence_score"])

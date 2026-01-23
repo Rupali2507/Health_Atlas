@@ -33,4 +33,7 @@ gunicorn
 google-generativeai 
 pdf2image 
 Pillow
-#updated_requirements
+
+usaddress
+
+
