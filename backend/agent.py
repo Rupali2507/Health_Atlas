@@ -2,12 +2,13 @@ import os
 import json
 import re
 import network_fix
-from typing import TypedDict, List, Dict
+from typing import TypedDict, List, Dict, Annotated
 from langchain_groq import ChatGroq
 from langgraph.graph import StateGraph, END
 from dotenv import load_dotenv
 from thefuzz import fuzz
 import time
+import operator
 from tools import search_npi_registry, validate_address, scrape_provider_website
 from provider_requests import get_all_providers
 from logic_engine import SurgicalValidator
@@ -16,23 +17,34 @@ import datetime
 validator = SurgicalValidator()
 load_dotenv()
 
+def merge_dicts(a: dict, b: dict) -> dict:
+    """Helper to merge dictionaries from parallel branches."""
+    return {**a, **b}
+
+
 # ============================================
-# ENHANCED STATE WITH RICH METADATA
+# ENHANCED STATE (PARALLEL SAFE)
 # ============================================
 class AgentState(TypedDict):
     initial_data: dict
-    log: List[str]
+    # Logs might arrive from multiple nodes at once, so we append (add) them
+    log: Annotated[List[str], operator.add] 
+    
     npi_result: dict
     address_result: dict
     enrichment_data: dict
-    qa_flags: List[str]
+    
+    # Flags might come from multiple places (though usually QA does it)
+    qa_flags: Annotated[List[str], operator.add]
     qa_corrections: dict        
     final_profile: dict
     confidence_score: float
-    # NEW: Advanced metadata
-    execution_metadata: dict  # Timing, performance metrics
-    data_provenance: dict     # Track where each field came from
-    quality_metrics: dict     # Detailed quality breakdown
+    
+    # CRITICAL FIX: Merge dictionary updates from parallel nodes
+    execution_metadata: Annotated[dict, merge_dicts] 
+    
+    data_provenance: dict     
+    quality_metrics: dict
 
 llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
 
@@ -852,11 +864,11 @@ def confidence_scorer_node(state: AgentState) -> dict:
     }
 
 # ============================================
-# GRAPH CONSTRUCTION
+# PARALLEL GRAPH CONSTRUCTION
 # ============================================
 workflow = StateGraph(AgentState)
 
-# Add nodes
+# 1. Define Nodes
 workflow.add_node("npi_tool", call_npi_tool)
 workflow.add_node("address_tool", call_address_tool)
 workflow.add_node("enrichment", enrichment_node)
@@ -864,11 +876,29 @@ workflow.add_node("quality_assurance", quality_assurance_node)
 workflow.add_node("synthesis", synthesis_node)
 workflow.add_node("scorer", confidence_scorer_node)
 
-# Define flow
-workflow.set_entry_point("npi_tool")
-workflow.add_edge("npi_tool", "address_tool")
-workflow.add_edge("address_tool", "enrichment")
+# 2. Define a Dispatcher (Start Node)
+def dispatcher_node(state):
+    # This node just passes the state to the parallel branches
+    return state
+
+workflow.add_node("dispatcher", dispatcher_node)
+workflow.set_entry_point("dispatcher")
+
+# 3. PARALLEL FAN-OUT
+# Connect Dispatcher to 3 nodes simultaneously.
+# LangGraph will execute these in parallel threads automatically.
+workflow.add_edge("dispatcher", "npi_tool")
+workflow.add_edge("dispatcher", "address_tool")
+workflow.add_edge("dispatcher", "enrichment")
+
+# 4. FAN-IN (Synchronization)
+# Connect the 3 parallel nodes to Quality Assurance.
+# QA will wait for all 3 to finish merging their results into the state.
+workflow.add_edge("npi_tool", "quality_assurance")
+workflow.add_edge("address_tool", "quality_assurance")
 workflow.add_edge("enrichment", "quality_assurance")
+
+# 5. Linear Completion
 workflow.add_edge("quality_assurance", "synthesis")
 workflow.add_edge("synthesis", "scorer")
 workflow.add_edge("scorer", END)
