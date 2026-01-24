@@ -12,6 +12,10 @@ import operator
 from pathlib import Path
 import datetime
 import logging
+import sqlite3
+import json
+import datetime
+
 
 # Import your custom modules
 from tools import search_npi_registry, validate_address, scrape_provider_website
@@ -990,27 +994,46 @@ def hitl_decision_node(state: AgentState) -> Literal["auto_approve", "human_revi
         return "auto_approve"
 
 def human_review_interrupt_node(state: AgentState) -> dict:
-    """HITL Node: Creates review task."""
+    """
+    OPTION B: Manual Human-in-the-Loop (SQLite Queue)
+    """
+
     print("\n┌─────────────────────────────────────────┐")
     print("│ HUMAN REVIEW REQUIRED                  │")
     print("└─────────────────────────────────────────┘")
-    
-    print(f"\nReason: {state.get('review_reason')}")
-    print(f"Confidence: {state.get('confidence_score', 0):.2%}")
-    print(f"Fraud Indicators: {len(state.get('fraud_indicators', []))}")
-    
-    print("\n📋 Review Queue Entry Created:")
-    print(f"  - Provider: {state['initial_data'].get('full_name')}")
-    print(f"  - NPI: {state['initial_data'].get('NPI')}")
-    priority = "HIGH" if len(state.get('fraud_indicators', [])) > 0 else "MEDIUM"
-    print(f"  - Priority: {priority}")
-    
-    # In production: raise NodeInterrupt(f"Human review: {state['review_reason']}")
-    
+
+    conn = sqlite3.connect("review_queue.db")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO review_queue
+        (provider_name, npi, confidence, flags, status, review_reason, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        state["initial_data"].get("full_name"),
+        state["initial_data"].get("NPI"),
+        state.get("confidence_score"),
+        json.dumps(state.get("qa_flags", [])),
+        "PENDING",
+        state.get("review_reason"),
+        datetime.datetime.now().isoformat()
+    ))
+
+    review_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+
+    print(f"📋 Review Queue Entry #{review_id} created")
+    print(f"   Reason: {state.get('review_reason')}")
+    print(f"   Confidence: {state.get('confidence_score', 0):.2%}")
+
     return {
+        "status": "PENDING_REVIEW",
+        "review_queue_id": review_id,
         "final_profile": state.get("golden_record", {}),
-        "log": [f"HITL: Flagged for review - {state.get('review_reason')}"]
+        "log": [f"HITL: Sent to manual review (ID {review_id})"]
     }
+
 
 def auto_approve_node(state: AgentState) -> dict:
     """Auto-approval and database commit."""
