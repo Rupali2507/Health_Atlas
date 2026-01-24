@@ -35,5 +35,6 @@ pdf2image
 Pillow
 
 usaddress
+googlemaps
 
 
