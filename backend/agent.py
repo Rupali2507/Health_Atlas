@@ -30,6 +30,36 @@ from production_tools import (
     search_provider_web_presence
 )
 
+# ============================================
+# DATABASE INITIALIZATION
+# ============================================
+def init_review_queue_db():
+    """Initialize SQLite database for human review queue."""
+    conn = sqlite3.connect("review_queue.db")
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS review_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider_name TEXT,
+            npi TEXT,
+            confidence REAL,
+            flags TEXT,
+            status TEXT,
+            review_reason TEXT,
+            created_at TEXT,
+            reviewed_at TEXT,
+            reviewer_notes TEXT
+        )
+    """)
+    
+    conn.commit()
+    conn.close()
+    print("✅ Review queue database initialized")
+
+# Initialize on module load
+init_review_queue_db()
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -725,7 +755,7 @@ def quality_assurance_node(state: AgentState) -> dict:
         "fraud_indicators": fraud_indicators,
         "conflicting_data": conflicting_data,
         "quality_metrics": {
-            "flag_severity": flag_severity,
+            "flag_severity": flag_severity,  # ← Make sure this exists
             "risk_score": risk_score,
             "fraud_indicator_count": len(fraud_indicators),
             "conflict_count": len(conflicting_data)
@@ -835,7 +865,6 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
     fraud_indicators = state.get("fraud_indicators", [])
     
     total_score = 0.0
-    dimension_scores = {}
 
     WEIGHTS = {
         "primary_source_verification": 0.35,
@@ -849,7 +878,7 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
     print("\n  Scoring Dimensions:")
     print("  ─────────────────────────────────────────")
 
-    # DIMENSION 1: PRIMARY SOURCE VERIFICATION
+    # DIMENSION 1
     psv_score = 0.0
     npi_meta = state.get("execution_metadata", {}).get("nppes", {})
     if npi_meta.get("match_confidence", 0) >= 0.95:
@@ -868,11 +897,10 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
     else:
         psv_score = 0.0
     
-    dimension_scores["primary_source"] = psv_score
     total_score += psv_score * WEIGHTS["primary_source_verification"]
     print(f"  [1] Primary Sources: {psv_score:.2f} × {WEIGHTS['primary_source_verification']:.2f}")
 
-    # DIMENSION 2: ADDRESS RELIABILITY
+    # DIMENSION 2
     address_score = 0.0
     address_meta = state.get("execution_metadata", {}).get("address", {})
     
@@ -886,43 +914,37 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
     if state.get("address_result", {}).get("is_medical_facility"):
         address_score = min(1.0, address_score + 0.1)
     
-    dimension_scores["address"] = address_score
     total_score += address_score * WEIGHTS["address_reliability"]
     print(f"  [2] Address: {address_score:.2f} × {WEIGHTS['address_reliability']:.2f}")
 
-    # DIMENSION 3: DIGITAL FOOTPRINT
+    # DIMENSION 3
     footprint_score = state.get("digital_footprint_score", 0)
-    dimension_scores["digital_footprint"] = footprint_score
     total_score += footprint_score * WEIGHTS["digital_footprint"]
     print(f"  [3] Digital Footprint: {footprint_score:.2f} × {WEIGHTS['digital_footprint']:.2f}")
 
-    # DIMENSION 4: DATA COMPLETENESS
+    # DIMENSION 4
     required_fields = ["provider_name", "npi", "specialty", "address", "phone"]
     present = sum(1 for f in required_fields if final_data.get(f))
     completeness_score = present / len(required_fields)
     
-    dimension_scores["completeness"] = completeness_score
     total_score += completeness_score * WEIGHTS["data_completeness"]
     print(f"  [4] Completeness: {completeness_score:.2f} × {WEIGHTS['data_completeness']:.2f}")
 
-    # DIMENSION 5: FRESHNESS
+    # DIMENSION 5
     last_updated = state["initial_data"].get("last_updated", "2024-01-01")
     freshness_score = calculate_data_freshness(last_updated)
     
-    dimension_scores["freshness"] = freshness_score
     total_score += freshness_score * WEIGHTS["freshness"]
     print(f"  [5] Freshness: {freshness_score:.2f} × {WEIGHTS['freshness']:.2f}")
 
-    # DIMENSION 6: FRAUD RISK PENALTY
+    # DIMENSION 6
     fraud_penalty = len(fraud_indicators) * 0.15
     fraud_penalty = min(fraud_penalty, 0.05)
-    
-    fraud_score = max(0, WEIGHTS["fraud_risk"] - fraud_penalty)
-    dimension_scores["fraud_risk"] = fraud_score
-    total_score += fraud_score
+    risk_score = max(0, WEIGHTS["fraud_risk"] - fraud_penalty)
+    total_score += risk_score
     print(f"  [6] Fraud Risk: {WEIGHTS['fraud_risk']:.2f} - {fraud_penalty:.2f}")
 
-    # FINAL SCORE & TIER ASSIGNMENT
+    # FINAL SCORE
     final_score = round(max(0.0, min(1.0, total_score)), 3)
     
     requires_human_review = False
@@ -954,16 +976,27 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
         else:
             review_reason = "Overall confidence below threshold"
 
-    print("\n  ═════════════════════════════════════════")
-    print(f"  {tier_emoji} PATH: {path}")
-    print(f"  CONFIDENCE: {final_score:.3f} ({final_score*100:.1f}%)")
-    print(f"  TIER: {tier}")
-    print(f"  ACTION: {tier_desc}")
+    print(f"\n  🔴 PATH: {path}")
+    print(f"  CONFIDENCE: {final_score:.3f}")
+
+    # THE FIX - Add these two dictionaries
+    score_breakdown = {
+        "identity": psv_score,
+        "address": address_score,
+        "completeness": completeness_score,
+        "freshness": freshness_score,
+        "enrichment": footprint_score,
+        "risk": risk_score
+    }
     
-    if requires_human_review:
-        print(f"  ⚠️  REVIEW REASON: {review_reason}")
-    
-    print("  ═════════════════════════════════════════")
+    dimension_percentages = {
+        "identity": f"{int(psv_score * 100)}%",
+        "address": f"{int(address_score * 100)}%",
+        "completeness": f"{int(completeness_score * 100)}%",
+        "freshness": f"{int(freshness_score * 100)}%",
+        "enrichment": f"{int(footprint_score * 100)}%",
+        "risk_penalty": f"{int(risk_score * 100)}%"
+    }
 
     return {
         "confidence_score": final_score,
@@ -971,16 +1004,20 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
         "review_reason": review_reason,
         "quality_metrics": {
             **state.get("quality_metrics", {}),
+            "score_breakdown": score_breakdown,  # ← THE FIX
+            "dimension_percentages": dimension_percentages,  # ← THE FIX
             "confidence_tier": tier,
             "tier_description": tier_desc,
             "tier_emoji": tier_emoji,
             "path": path,
-            "dimension_scores": dimension_scores,
+            "flag_severity": state.get("quality_metrics", {}).get("flag_severity", {}),
+            "risk_score": state.get("quality_metrics", {}).get("risk_score", 0),
+            "fraud_indicator_count": len(fraud_indicators),
+            "conflict_count": len(state.get("conflicting_data", [])),
             "requires_human_review": requires_human_review,
             "review_reason": review_reason
         }
     }
-
 # ============================================
 # HITL DECISION & ACTION NODES
 # ============================================
@@ -1002,35 +1039,51 @@ def human_review_interrupt_node(state: AgentState) -> dict:
     print("│ HUMAN REVIEW REQUIRED                  │")
     print("└─────────────────────────────────────────┘")
 
-    conn = sqlite3.connect("review_queue.db")
-    cursor = conn.cursor()
+    try:
+        conn = sqlite3.connect("review_queue.db")
+        cursor = conn.cursor()
 
-    cursor.execute("""
-        INSERT INTO review_queue
-        (provider_name, npi, confidence, flags, status, review_reason, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (
-        state["initial_data"].get("full_name"),
-        state["initial_data"].get("NPI"),
-        state.get("confidence_score"),
-        json.dumps(state.get("qa_flags", [])),
-        "PENDING",
-        state.get("review_reason"),
-        datetime.datetime.now().isoformat()
-    ))
+        cursor.execute("""
+            INSERT INTO review_queue
+            (provider_name, npi, confidence, flags, status, review_reason, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            state["initial_data"].get("full_name"),
+            state["initial_data"].get("NPI"),
+            state.get("confidence_score"),
+            json.dumps(state.get("qa_flags", [])),
+            "PENDING",
+            state.get("review_reason"),
+            datetime.datetime.now().isoformat()
+        ))
 
-    review_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+        review_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
 
-    print(f"📋 Review Queue Entry #{review_id} created")
-    print(f"   Reason: {state.get('review_reason')}")
-    print(f"   Confidence: {state.get('confidence_score', 0):.2%}")
+        print(f"📋 Review Queue Entry #{review_id} created")
+        print(f"   Reason: {state.get('review_reason')}")
+        print(f"   Confidence: {state.get('confidence_score', 0):.2%}")
+
+    except Exception as e:
+        print(f"⚠️ Failed to save to review queue: {e}")
+        review_id = None
+
+    # ---- CRITICAL: Set final_profile from golden_record ----
+    final_profile = state.get("golden_record", {})
+    
+    # Fallback if golden_record is empty
+    if not final_profile or not final_profile.get("provider_name"):
+        final_profile = {
+            "provider_name": state["initial_data"].get("full_name"),
+            "npi": state["initial_data"].get("NPI"),
+            "specialty": state["initial_data"].get("specialty"),
+            "address": state["initial_data"].get("address"),
+            "phone": state["initial_data"].get("phone"),
+        }
 
     return {
-        "status": "PENDING_REVIEW",
-        "review_queue_id": review_id,
-        "final_profile": state.get("golden_record", {}),
+        "final_profile": final_profile,  # ← CRITICAL: Must be set
         "log": [f"HITL: Sent to manual review (ID {review_id})"]
     }
 
@@ -1041,7 +1094,17 @@ def auto_approve_node(state: AgentState) -> dict:
     
     golden_record = state.get("golden_record", {})
     
-    # DATABASE COMMIT (See database guide below)
+    # Fallback if golden_record is empty
+    if not golden_record or not golden_record.get("provider_name"):
+        golden_record = {
+            "provider_name": state["initial_data"].get("full_name"),
+            "npi": state["initial_data"].get("NPI"),
+            "specialty": state["initial_data"].get("specialty"),
+            "address": state["initial_data"].get("address"),
+            "phone": state["initial_data"].get("phone"),
+        }
+    
+    # DATABASE COMMIT
     try:
         save_to_database(golden_record, state)
         print("  ✓ Successfully saved to database")
@@ -1050,7 +1113,7 @@ def auto_approve_node(state: AgentState) -> dict:
         print(f"  ✗ Database save failed: {e}")
     
     return {
-        "final_profile": golden_record,
+        "final_profile": golden_record,  # ← CRITICAL: Must be set
         "log": [f"AUTO-APPROVED: Confidence {state.get('confidence_score', 0):.2%}"]
     }
 
