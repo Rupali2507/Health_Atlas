@@ -25,7 +25,7 @@ from typing import Dict, Optional, List
 from datetime import datetime
 
 # Import state scrapers
-from backend.state_scrapers import get_scraper, is_state_supported, SUPPORTED_STATES
+from state_scrapers import get_scraper, is_state_supported, SUPPORTED_STATES
 
 # ============================================
 # 1. OIG LEIE EXCLUSION CHECK
