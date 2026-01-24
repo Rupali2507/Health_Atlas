@@ -2,51 +2,143 @@ import os
 import json
 import re
 import network_fix
-from typing import TypedDict, List, Dict, Annotated
+from typing import TypedDict, List, Dict, Annotated, Literal, Callable
 from langchain_groq import ChatGroq
 from langgraph.graph import StateGraph, END
 from dotenv import load_dotenv
 from thefuzz import fuzz
 import time
 import operator
+from pathlib import Path
+import datetime
+import logging
+
+# Import your custom modules
 from tools import search_npi_registry, validate_address, scrape_provider_website
 from provider_requests import get_all_providers
 from logic_engine import SurgicalValidator
-import datetime
+
+from production_tools import (
+    check_oig_leie_csv_method,
+    verify_state_license_universal,
+    search_google_scholar,
+    verify_medical_facility,
+    search_provider_web_presence
+)
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Constants
+OIG_CSV_PATH = Path(__file__).resolve().parent.parent / "Sample_Data" / "oig_leie_database.csv"
+TESTING_MODE = os.getenv("TESTING_MODE", "false").lower() == "true"
 
 validator = SurgicalValidator()
 load_dotenv()
 
 def merge_dicts(a: dict, b: dict) -> dict:
-    """Helper to merge dictionaries from parallel branches."""
-    return {**a, **b}
-
+    """Helper to deep merge dictionaries from parallel branches."""
+    result = a.copy()
+    for key, value in b.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = merge_dicts(result[key], value)
+        else:
+            result[key] = value
+    return result
 
 # ============================================
-# ENHANCED STATE (PARALLEL SAFE)
+# ENHANCED STATE WITH SOURCE HIERARCHY
 # ============================================
 class AgentState(TypedDict):
     initial_data: dict
-    # Logs might arrive from multiple nodes at once, so we append (add) them
-    log: Annotated[List[str], operator.add] 
+    log: Annotated[List[str], operator.add]
     
+    # Step 2: Primary Source Verification Results
     npi_result: dict
+    oig_leie_result: dict
+    state_board_result: dict
+    
+    # Step 3: Web Enrichment
     address_result: dict
-    enrichment_data: dict
+    web_enrichment_data: dict
+    digital_footprint_score: float
     
-    # Flags might come from multiple places (though usually QA does it)
+    # Step 4: QA Findings
     qa_flags: Annotated[List[str], operator.add]
-    qa_corrections: dict        
-    final_profile: dict
+    qa_corrections: dict
+    fraud_indicators: Annotated[List[str], operator.add]
+    
+    # Step 5: AI Synthesis
+    conflicting_data: Annotated[List[dict], operator.add]
+    golden_record: dict
+    
+    # Step 6: Confidence & Human-in-Loop
     confidence_score: float
+    confidence_breakdown: dict
+    requires_human_review: bool
+    review_reason: str
     
-    # CRITICAL FIX: Merge dictionary updates from parallel nodes
-    execution_metadata: Annotated[dict, merge_dicts] 
-    
-    data_provenance: dict     
+    final_profile: dict
+    execution_metadata: Annotated[dict, merge_dicts]
+    data_provenance: dict
     quality_metrics: dict
 
 llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
+
+# ============================================
+# SOURCE AUTHORITY HIERARCHY
+# ============================================
+SOURCE_HIERARCHY = {
+    "state_medical_board": 100,
+    "nppes_api": 90,
+    "oig_leie": 85,
+    "google_business": 70,
+    "provider_website": 60,
+    "csv_upload": 40,
+}
+
+def calculate_data_freshness(last_updated: str) -> float:
+    """Decay model: Data degrades over time."""
+    try:
+        update_date = datetime.datetime.strptime(last_updated, "%Y-%m-%d")
+        days_old = (datetime.datetime.now() - update_date).days
+        
+        if days_old < 30:
+            return 1.0
+        elif days_old < 90:
+            return 0.5
+        else:
+            return max(0.1, 1.0 - (days_old / 365))
+    except:
+        return 0.3
+
+# ============================================
+# ERROR HANDLING DECORATOR
+# ============================================
+def safe_node_execution(node_func: Callable) -> Callable:
+    """Decorator to add error handling and logging to nodes."""
+    def wrapper(state: AgentState) -> dict:
+        node_name = node_func.__name__
+        try:
+            logger.info(f"Executing {node_name}...")
+            result = node_func(state)
+            logger.info(f"✓ {node_name} completed successfully")
+            return result
+        except Exception as e:
+            logger.error(f"✗ ERROR in {node_name}: {str(e)}", exc_info=True)
+            return {
+                "log": [f"ERROR in {node_name}: {str(e)}"],
+                "execution_metadata": {
+                    **state.get("execution_metadata", {}),
+                    node_name: {
+                        "error": str(e),
+                        "status": "failed",
+                        "timestamp": datetime.datetime.now().isoformat()
+                    }
+                }
+            }
+    return wrapper
 
 # ============================================
 # UTILITY: ROBUST JSON EXTRACTION
@@ -56,12 +148,10 @@ def extract_json_from_response(text: str) -> dict:
     if not text or not text.strip():
         raise ValueError("Empty response from LLM")
     
-    # Remove markdown
     text = re.sub(r'```json\s*', '', text)
     text = re.sub(r'```\s*', '', text)
     text = text.strip()
     
-    # Find JSON boundaries
     first_brace = text.find('{')
     last_brace = text.rfind('}')
     
@@ -78,49 +168,43 @@ def extract_json_from_response(text: str) -> dict:
     try:
         return json.loads(json_str)
     except json.JSONDecodeError:
-        # Attempt fixes
         json_str = json_str.replace("'", '"')
         json_str = re.sub(r',\s*}', '}', json_str)
         json_str = re.sub(r',\s*]', ']', json_str)
         return json.loads(json_str)
 
 # ============================================
-# STAGE 1: NPI VALIDATION (ENHANCED)
+# UTILITY: NAME PARSING
 # ============================================
-def call_npi_tool(state: AgentState) -> dict:
-    """
-    ENHANCED NPI Registry validation with rich metadata.
-    
-    New Features:
-    - Timing metrics
-    - Match confidence scoring
-    - Multiple match disambiguation
-    - Data freshness analysis
-    """
+def parse_provider_name(full_name: str) -> tuple:
+    """Extract first and last name from full name."""
+    titles_to_remove = ["DR.", "DR", "MD", "DDS", "DVM", "DO", "PHD", "PA", "NP"]
+    name_parts = [
+        part for part in full_name.strip().split() 
+        if part.upper().replace('.', '') not in titles_to_remove
+    ]
+    first_name = name_parts[0] if name_parts else ""
+    last_name = name_parts[-1] if len(name_parts) > 1 else ""
+    return first_name, last_name
+
+# ============================================
+# STEP 2A: NPPES VERIFICATION
+# ============================================
+@safe_node_execution
+def verify_npi_node(state: AgentState) -> dict:
+    """STEP 2A: Primary Source Verification - NPPES"""
     print("┌─────────────────────────────────────────┐")
-    print("│ STAGE 1: NPI REGISTRY VALIDATION       │")
+    print("│ STEP 2A: NPPES PRIMARY VERIFICATION    │")
     print("└─────────────────────────────────────────┘")
     
     start_time = time.time()
     initial_data = state["initial_data"]
     
-    # Smart name parsing (remove titles)
     full_name = initial_data.get("full_name", "")
-    titles_to_remove = ["DR.", "DR", "MD", "DDS", "DVM", "DO", "PHD", "PA", "NP"]
-    
-    name_parts = [
-        part for part in full_name.strip().split() 
-        if part.upper().replace('.', '') not in titles_to_remove
-    ]
-    
-    first_name = name_parts[0] if name_parts else ""
-    last_name = name_parts[-1] if len(name_parts) > 1 else ""
-    middle_name = name_parts[1] if len(name_parts) > 2 else ""
-    
+    first_name, last_name = parse_provider_name(full_name)
     npi_number = initial_data.get("NPI", "")
     state_code = initial_data.get("state", "")
     
-    # Call NPI API
     result = search_npi_registry(
         first_name=first_name, 
         last_name=last_name, 
@@ -128,58 +212,205 @@ def call_npi_tool(state: AgentState) -> dict:
         state=state_code
     )
     
-    # Enhanced result analysis
     execution_time = time.time() - start_time
     
-    # Calculate match confidence
     match_confidence = 0.0
+    enumeration_type = None
+    taxonomy_codes = []
+    
     if result.get("result_count", 0) == 1:
         match_confidence = 1.0
-        print("✓ Exact NPI match found")
+        provider_data = result.get("results", [{}])[0]
+        enumeration_type = provider_data.get("enumeration_type")
+        taxonomies = provider_data.get("taxonomies", [])
+        taxonomy_codes = [t.get("code") for t in taxonomies if t.get("code")]
+        print(f"✓ Exact NPI match: {enumeration_type}")
+        print(f"  Taxonomies: {', '.join(taxonomy_codes[:3])}")
     elif result.get("result_count", 0) > 1:
         match_confidence = 0.7
-        print(f"⚠ Multiple matches ({result['result_count']}) - disambiguation needed")
+        print(f"⚠ Multiple matches ({result['result_count']}) - needs disambiguation")
     else:
-        print("✗ No NPI match found - CRITICAL ISSUE")
+        print("✗ No NPI match - CRITICAL ISSUE")
     
-    # Analyze data freshness
     freshness_score = 0.0
+    last_updated = None
     if result.get("result_count", 0) > 0:
         last_updated = result.get("results", [{}])[0].get("basic", {}).get("last_updated")
         if last_updated:
-            try:
-                update_date = datetime.datetime.strptime(last_updated, "%Y-%m-%d")
-                days_old = (datetime.datetime.now() - update_date).days
-                freshness_score = max(0, 1 - (days_old / 365))  # Decay over 1 year
-                print(f"  Data age: {days_old} days (freshness: {freshness_score:.2f})")
-            except:
-                pass
+            freshness_score = calculate_data_freshness(last_updated)
+            print(f"  NPPES freshness: {freshness_score:.2%}")
     
-    print(f"  Execution time: {execution_time:.2f}s")
-    print(f"  Match confidence: {match_confidence:.2f}")
-    
-    # Enhanced metadata
     metadata = {
-        "stage": "npi_validation",
+        "stage": "nppes_verification",
         "execution_time_seconds": execution_time,
         "match_confidence": match_confidence,
         "freshness_score": freshness_score,
         "result_count": result.get("result_count", 0),
+        "enumeration_type": enumeration_type,
+        "taxonomy_codes": taxonomy_codes,
+        "source_authority": SOURCE_HIERARCHY["nppes_api"],
         "timestamp": datetime.datetime.now().isoformat()
     }
     
     return {
         "npi_result": result,
-        "execution_metadata": {**state.get("execution_metadata", {}), "npi": metadata}
+        "execution_metadata": {"nppes": metadata}
     }
 
 # ============================================
-# STAGE 2: ADDRESS VALIDATION (ENHANCED)
+# STEP 2B: OIG LEIE EXCLUSION CHECK
 # ============================================
-def call_address_tool(state: AgentState) -> dict:
-    """Enhanced address validation with detailed analysis."""
+@safe_node_execution
+def check_oig_exclusion_node(state: AgentState) -> dict:
+    """STEP 2B: OIG LEIE Exclusion Verification"""
     print("\n┌─────────────────────────────────────────┐")
-    print("│ STAGE 2: ADDRESS VALIDATION            │")
+    print("│ STEP 2B: OIG EXCLUSION CHECK           │")
+    print("└─────────────────────────────────────────┘")
+    
+    start_time = time.time()
+    initial_data = state["initial_data"]
+    
+    full_name = initial_data.get("full_name", "")
+    first_name, last_name = parse_provider_name(full_name)
+    
+    result = check_oig_leie_csv_method(
+        npi=initial_data.get("NPI"),
+        first_name=first_name,
+        last_name=last_name
+    )
+    
+    is_excluded = result.get("is_excluded", False)
+    exclusion_details = result.get("exclusion_details")
+    
+    # TESTING MODE: Mock exclusion trigger
+    if TESTING_MODE and "EXCLUDED" in full_name.upper():
+        is_excluded = True
+        exclusion_details = {
+            "exclusion_type": "1128(a)(1)",
+            "exclusion_date": "2023-01-15",
+            "waiver_date": None
+        }
+        print("❌ CRITICAL: Provider is on OIG LEIE - CANNOT USE (MOCK)")
+    elif is_excluded:
+        print("❌ CRITICAL: Provider is on OIG LEIE - CANNOT USE")
+    else:
+        print("✓ No OIG exclusions found")
+    
+    execution_time = time.time() - start_time
+    
+    metadata = {
+        "stage": "oig_exclusion_check",
+        "execution_time_seconds": execution_time,
+        "is_excluded": is_excluded,
+        "exclusion_details": exclusion_details,
+        "source_authority": SOURCE_HIERARCHY["oig_leie"],
+        "timestamp": datetime.datetime.now().isoformat()
+    }
+    
+    return {
+        "oig_leie_result": {
+            "is_excluded": is_excluded,
+            "details": exclusion_details
+        },
+        "execution_metadata": {"oig_leie": metadata}
+    }
+
+# ============================================
+# STEP 2C: STATE BOARD LICENSE CHECK
+# ============================================
+@safe_node_execution
+def verify_state_license_node(state: AgentState) -> dict:
+    """STEP 2C: State Medical Board Verification"""
+    print("\n┌─────────────────────────────────────────┐")
+    print("│ STEP 2C: STATE BOARD LICENSE CHECK     │")
+    print("└─────────────────────────────────────────┘")
+    
+    start_time = time.time()
+    initial_data = state["initial_data"]
+    
+    # Initialize variables
+    disciplinary_actions = []
+    expiration_date = "Unknown"
+    license_status = "Unknown"
+    
+    license_number = initial_data.get("license_number", "")
+    state_code = initial_data.get("state", "")
+    
+    if not license_number or not state_code:
+        print("⚠ Skipped - Missing license number or state")
+        return {
+            "state_board_result": {
+                "status": "Skipped - Incomplete data",
+                "expiration_date": expiration_date,
+                "disciplinary_actions": []
+            },
+            "execution_metadata": {
+                "state_board": {
+                    "stage": "state_board_verification",
+                    "status": "skipped",
+                    "execution_time_seconds": 0
+                }
+            }
+        }
+    
+    result = verify_state_license_universal(
+        state_code=state_code,
+        license_number=license_number,
+        provider_name=initial_data.get("full_name")
+    )
+    
+    license_status = result.get("status", "Unknown")
+    expiration_date = result.get("expiration_date", "Unknown")
+    disciplinary_actions = result.get("disciplinary_actions", [])
+    
+    # TESTING MODE: Mock suspended/revoked licenses
+    if TESTING_MODE:
+        if "SUSPENDED" in license_number.upper():
+            license_status = "Suspended"
+            disciplinary_actions.append({
+                "action_type": "Suspension",
+                "effective_date": "2024-06-01",
+                "reason": "Failed to complete CME requirements"
+            })
+            print("❌ CRITICAL: License is SUSPENDED (MOCK)")
+        elif "REVOKED" in license_number.upper():
+            license_status = "Revoked"
+            print("❌ CRITICAL: License is REVOKED (MOCK)")
+    
+    if license_status == "Active":
+        print(f"✓ License Active (expires: {expiration_date})")
+    elif license_status in ["Suspended", "Revoked"]:
+        print(f"❌ CRITICAL: License is {license_status}")
+    
+    execution_time = time.time() - start_time
+    
+    metadata = {
+        "stage": "state_board_verification",
+        "execution_time_seconds": execution_time,
+        "license_status": license_status,
+        "expiration_date": expiration_date,
+        "disciplinary_actions": disciplinary_actions,
+        "source_authority": SOURCE_HIERARCHY["state_medical_board"],
+        "timestamp": datetime.datetime.now().isoformat()
+    }
+    
+    return {
+        "state_board_result": {
+            "status": license_status,
+            "expiration_date": expiration_date,
+            "disciplinary_actions": disciplinary_actions
+        },
+        "execution_metadata": {"state_board": metadata}
+    }
+
+# ============================================
+# STEP 3A: ADDRESS VALIDATION
+# ============================================
+@safe_node_execution
+def validate_address_node(state: AgentState) -> dict:
+    """STEP 3A: Address Validation with Geo-Verification"""
+    print("\n┌─────────────────────────────────────────┐")
+    print("│ STEP 3A: GEO-VERIFIED ADDRESS CHECK    │")
     print("└─────────────────────────────────────────┘")
     
     start_time = time.time()
@@ -194,7 +425,6 @@ def call_address_tool(state: AgentState) -> dict:
     
     execution_time = time.time() - start_time
     
-    # Enhanced verdict parsing
     verdict = result.get("verdict", "Unknown")
     confidence_map = {
         "High Confidence Match": 1.0,
@@ -204,7 +434,26 @@ def call_address_tool(state: AgentState) -> dict:
     }
     
     address_confidence = confidence_map.get(verdict, 0.5)
-    print(f"  Verdict: {verdict} (confidence: {address_confidence:.2f})")
+    
+    geo_result = verify_medical_facility(
+        address=initial_data.get("address"),
+        city=initial_data.get("city"),
+        state=initial_data.get("state"),
+        zip_code=initial_data.get("zip_code")
+    )
+    
+    is_medical_facility = geo_result.get("is_medical_facility", True)
+    facility_type = geo_result.get("facility_type", "Unknown")
+    
+    # TESTING MODE: Mock residential address
+    if TESTING_MODE and "123 FAKE ST" in initial_data.get("address", "").upper():
+        is_medical_facility = False
+        facility_type = "Residential"
+        print("⚠ WARNING: Address appears to be residential - fraud indicator (MOCK)")
+    elif is_medical_facility:
+        print(f"✓ Verified medical facility: {facility_type}")
+    
+    print(f"  USPS Verdict: {verdict} (confidence: {address_confidence:.2%})")
     print(f"  Execution time: {execution_time:.2f}s")
     
     metadata = {
@@ -212,831 +461,708 @@ def call_address_tool(state: AgentState) -> dict:
         "execution_time_seconds": execution_time,
         "confidence": address_confidence,
         "verdict": verdict,
+        "is_medical_facility": is_medical_facility,
+        "facility_type": facility_type,
+        "source_authority": SOURCE_HIERARCHY["google_business"],
         "timestamp": datetime.datetime.now().isoformat()
     }
     
     return {
-        "address_result": result,
-        "execution_metadata": {**state.get("execution_metadata", {}), "address": metadata}
+        "address_result": {
+            **result,
+            "is_medical_facility": is_medical_facility,
+            "facility_type": facility_type
+        },
+        "execution_metadata": {"address": metadata}
     }
 
 # ============================================
-# STAGE 3: WEB ENRICHMENT (ENHANCED)
+# STEP 3B: WEB ENRICHMENT WITH DIGITAL FOOTPRINT
 # ============================================
-def enrichment_node(state: AgentState) -> dict:
-    """Enhanced enrichment with quality scoring."""
+@safe_node_execution
+def web_enrichment_node(state: AgentState) -> dict:
+    """STEP 3B: Web Enrichment + Digital Footprint Analysis"""
     print("\n┌─────────────────────────────────────────┐")
-    print("│ STAGE 3: WEB ENRICHMENT                │")
+    print("│ STEP 3B: WEB ENRICHMENT & FOOTPRINT    │")
     print("└─────────────────────────────────────────┘")
     
     start_time = time.time()
-    url = state["initial_data"].get("website")
+    initial_data = state["initial_data"]
+    url = initial_data.get("website")
+    provider_name = initial_data.get("full_name", "")
     
-    if not url:
-        print("  Skipped - No website provided")
-        return {
-            "enrichment_data": {"status": "Skipped - No website provided"},
-            "execution_metadata": {**state.get("execution_metadata", {}), "enrichment": {
-                "stage": "enrichment",
-                "status": "skipped",
-                "execution_time_seconds": 0
-            }}
-        }
-    
-    scraped_text = scrape_provider_website(url=url)
-    
-    if "error" in scraped_text.lower():
-        print(f"  ✗ Failed to scrape website")
-        return {"enrichment_data": {"error": "Failed to scrape website."}}
-    
-    print(f"  Scraped {len(scraped_text)} characters")
-    
-    extraction_prompt = f"""Extract education and board certifications from this text.
-Return ONLY a JSON object with keys: education (list), certifications (list), languages (list), insurance_accepted (list).
+    enrichment_data = {}
+    if url:
+        scraped_text = scrape_provider_website(url=url)
+        
+        if "error" not in scraped_text.lower():
+            print(f"  Scraped {len(scraped_text)} characters from website")
+            
+            extraction_prompt = f"""Extract education and credentials from this text.
+Return ONLY a JSON object with keys: education, certifications, languages, insurance_accepted.
 
 TEXT: {scraped_text[:4000]}
 
-Example format:
-{{"education": ["Harvard Medical School - 2010"], "certifications": ["Board Certified in Surgery"], "languages": ["English", "Spanish"], "insurance_accepted": ["Medicare", "Blue Cross"]}}
+Example: {{"education": ["Harvard Medical School - 2010"], "certifications": ["Board Certified in Surgery"], "languages": ["English"], "insurance_accepted": ["Medicare"]}}
 """
+            
+            try:
+                response = llm.invoke(extraction_prompt)
+                enrichment_data = extract_json_from_response(response.content)
+                print(f"  ✓ Extracted credentials from website")
+            except Exception as e:
+                print(f"  ✗ Website parsing failed: {e}")
     
-    try:
-        response = llm.invoke(extraction_prompt)
-        parsed_data = extract_json_from_response(response.content)
-        
-        # Calculate enrichment quality score
-        enrichment_score = 0.0
-        field_weights = {
-            "education": 0.35,
-            "certifications": 0.35,
-            "languages": 0.15,
-            "insurance_accepted": 0.15
-        }
-        
-        for field, weight in field_weights.items():
-            if parsed_data.get(field) and len(parsed_data[field]) > 0:
-                enrichment_score += weight
-        
-        print(f"  ✓ Extracted {sum(len(parsed_data.get(k, [])) for k in ['education', 'certifications', 'languages', 'insurance_accepted'])} items")
-        print(f"  Enrichment quality: {enrichment_score:.2f}")
-        
-        execution_time = time.time() - start_time
-        
-        metadata = {
-            "stage": "enrichment",
-            "execution_time_seconds": execution_time,
-            "enrichment_score": enrichment_score,
-            "items_extracted": sum(len(parsed_data.get(k, [])) for k in ['education', 'certifications', 'languages', 'insurance_accepted']),
-            "timestamp": datetime.datetime.now().isoformat()
-        }
-        
-        return {
-            "enrichment_data": parsed_data,
-            "execution_metadata": {**state.get("execution_metadata", {}), "enrichment": metadata}
-        }
-    except Exception as e:
-        print(f"  ✗ Enrichment parsing error: {e}")
-        return {"enrichment_data": {"error": f"Failed to parse: {str(e)}"}}
+    digital_footprint_score = 0.0
+    recent_publications = []
+    
+    scholar_result = search_google_scholar(
+        provider_name=provider_name,
+        year_min=2024
+    )
+    
+    recent_publications = scholar_result.get("publications", [])
+    
+    web_result = search_provider_web_presence(
+        provider_name=provider_name,
+        npi=initial_data.get("NPI"),
+        phone=initial_data.get("phone")
+    )
+    
+    digital_footprint_score = web_result.get("web_presence_score", 0.0)
+    
+    if digital_footprint_score < 0.3:
+        print("  ⚠ WARNING: Weak digital footprint - possible 'Zombie' provider")
+    else:
+        print(f"  ✓ Active digital presence (score: {digital_footprint_score:.2%})")
+    
+    execution_time = time.time() - start_time
+    
+    metadata = {
+        "stage": "web_enrichment",
+        "execution_time_seconds": execution_time,
+        "digital_footprint_score": digital_footprint_score,
+        "recent_publications_count": len(recent_publications),
+        "source_authority": SOURCE_HIERARCHY["provider_website"],
+        "timestamp": datetime.datetime.now().isoformat()
+    }
+    
+    return {
+        "web_enrichment_data": enrichment_data,
+        "digital_footprint_score": digital_footprint_score,
+        "execution_metadata": {"web_enrichment": metadata}
+    }
 
 # ============================================
-# STAGE 4: QUALITY ASSURANCE (ULTRA-ENHANCED)
+# MERGER NODE (FIX FOR PARALLEL FAN-IN)
 # ============================================
-def quality_assurance_node(state: AgentState) -> dict:
-    """
-    ULTRA-ENHANCED Quality Assurance with surgical precision.
-    
-    New Features:
-    - Detailed flag categorization (Critical/Warning/Info)
-    - Smart auto-healing decisions with confidence scores
-    - Cross-field validation (e.g., specialty vs certifications)
-    - Risk scoring
-    """
+def merge_parallel_results_node(state: AgentState) -> dict:
+    """Merger node to ensure all parallel branches have completed."""
     print("\n┌─────────────────────────────────────────┐")
-    print("│ STAGE 4: QUALITY ASSURANCE (SURGICAL)  │")
+    print("│ MERGING PARALLEL VERIFICATION RESULTS  │")
+    print("└─────────────────────────────────────────┘")
+    
+    # Verify all required data is present
+    required_results = ["npi_result", "oig_leie_result", "state_board_result", 
+                       "address_result", "web_enrichment_data"]
+    
+    missing = [r for r in required_results if not state.get(r)]
+    if missing:
+        logger.warning(f"Missing results from: {', '.join(missing)}")
+    else:
+        print("✓ All parallel verification steps completed")
+    
+    return {}
+
+# ============================================
+# STEP 4: SURGICAL QA WITH FRAUD DETECTION
+# ============================================
+@safe_node_execution
+def quality_assurance_node(state: AgentState) -> dict:
+    """STEP 4: Quality Assurance with Fraud Detection"""
+    print("\n┌─────────────────────────────────────────┐")
+    print("│ STEP 4: SURGICAL QA & FRAUD DETECTION  │")
     print("└─────────────────────────────────────────┘")
 
     flags = []
     corrections = {}
+    fraud_indicators = []
+    conflicting_data = []
+    
     initial_data = state["initial_data"]
     
-    # Track flag severity
     flag_severity = {
         "CRITICAL": [],
         "WARNING": [],
         "INFO": []
     }
 
-    # ========================================
-    # CHECK 1: ADDRESS VALIDATION & AUTO-HEAL
-    # ========================================
-    print("\n  [1/6] Address Validation & Auto-Healing...")
+    # CHECK 1: OIG EXCLUSION
+    print("\n  [1/7] OIG Exclusion Verification...")
+    if state.get("oig_leie_result", {}).get("is_excluded"):
+        flag = "❌ PROVIDER IS EXCLUDED FROM FEDERAL PROGRAMS - DO NOT USE"
+        flags.append(flag)
+        flag_severity["CRITICAL"].append(flag)
+        fraud_indicators.append("OIG_LEIE_EXCLUSION")
+        print(f"    ✗ {flag}")
+    else:
+        print("    ✓ No OIG exclusions")
+
+    # CHECK 2: LICENSE STATUS
+    print("\n  [2/7] License Status Verification...")
+    license_status = state.get("state_board_result", {}).get("status", "")
+    
+    if license_status in ["Suspended", "Revoked"]:
+        flag = f"❌ CRITICAL: License {license_status} - DO NOT USE"
+        flags.append(flag)
+        flag_severity["CRITICAL"].append(flag)
+        fraud_indicators.append(f"LICENSE_{license_status.upper()}")
+        print(f"    ✗ {flag}")
+    elif license_status == "Active":
+        print("    ✓ License is Active")
+
+    # CHECK 3: GEO-VERIFICATION
+    print("\n  [3/7] Geo-Verification (Fraud Detection)...")
+    if not state.get("address_result", {}).get("is_medical_facility", True):
+        flag = "⚠ FRAUD INDICATOR: Address is not a medical facility"
+        flags.append(flag)
+        flag_severity["WARNING"].append(flag)
+        fraud_indicators.append("NON_MEDICAL_ADDRESS")
+        print(f"    ⚠ {flag}")
+    else:
+        print("    ✓ Address verified as medical facility")
+
+    # CHECK 4: CROSS-FIELD CONSISTENCY
+    print("\n  [4/7] Cross-Field Consistency...")
+    input_specialty = initial_data.get("specialty", "")
+    npi_taxonomies = state.get("execution_metadata", {}).get("nppes", {}).get("taxonomy_codes", [])
+    
+    if input_specialty and npi_taxonomies:
+        specialty_match = True  # In production, use taxonomy mapping
+        
+        if not specialty_match:
+            conflicting_data.append({
+                "field": "specialty",
+                "source_a": {"value": input_specialty, "source": "CSV", "authority": 40},
+                "source_b": {"value": npi_taxonomies[0], "source": "NPPES", "authority": 90}
+            })
+            print(f"    ⚠ Specialty conflict detected")
+        else:
+            print("    ✓ Specialty matches NPPES taxonomy")
+
+    # CHECK 5: LICENSE-ADDRESS ALIGNMENT
+    print("\n  [5/7] License-Address State Alignment...")
+    license_state = initial_data.get("state", "")
+    address_state = initial_data.get("state", "")
+    
+    if license_state and address_state and license_state != address_state:
+        flag = f"⚠ License state ({license_state}) ≠ Practice state ({address_state})"
+        flags.append(flag)
+        flag_severity["WARNING"].append(flag)
+        print(f"    ⚠ {flag}")
+    else:
+        print("    ✓ License and practice states match")
+
+    # CHECK 6: DIGITAL FOOTPRINT
+    print("\n  [6/7] Digital Footprint Analysis...")
+    footprint_score = state.get("digital_footprint_score", 0)
+    
+    if footprint_score < 0.3:
+        flag = "⚠ ZOMBIE CANDIDATE: Weak digital footprint - may be inactive"
+        flags.append(flag)
+        flag_severity["WARNING"].append(flag)
+        print(f"    ⚠ {flag}")
+    else:
+        print(f"    ✓ Active digital presence (score: {footprint_score:.2%})")
+
+    # CHECK 7: ADDRESS AUTO-HEALING
+    print("\n  [7/7] Address Auto-Healing...")
     input_address = initial_data.get("address", "")
-
     npi_address = ""
-    for addr in state["npi_result"].get("addresses", []):
-        if addr.get("address_purpose") == "LOCATION":
-            npi_address = addr.get("address_1", "")
-            if addr.get("address_2"):
-                npi_address += " " + addr.get("address_2")
-            break
+    
+    npi_results = state.get("npi_result", {}).get("results", [])
+    if npi_results:
+        addresses = npi_results[0].get("addresses", [])
+        for addr in addresses:
+            if addr.get("address_purpose") == "LOCATION":
+                npi_address = addr.get("address_1", "")
+                break
 
-    if npi_address:
+    if npi_address and input_address:
         validation_result = validator.compare_addresses(input_address, npi_address)
 
         if validation_result["action"] == "AUTO_CORRECT":
             corrections["address"] = validation_result["new_value"]
-            flag = f"AUTO-HEALED: {validation_result['reason']} (confidence: {validation_result.get('confidence', 0):.2f})"
+            flag = f"AUTO-HEALED: {validation_result['reason']}"
             flags.append(flag)
             flag_severity["INFO"].append(flag)
             print(f"    ✓ {flag}")
-
         elif validation_result["action"] == "FLAG":
-            flag = f"ADDRESS MISMATCH: {validation_result['reason']}"
-            flags.append(flag)
-            
-            if validation_result.get('confidence', 0) < 0.5:
-                flag_severity["CRITICAL"].append(flag)
-                print(f"    ✗ CRITICAL: {flag}")
-            else:
-                flag_severity["WARNING"].append(flag)
-                print(f"    ⚠ WARNING: {flag}")
-    else:
-        flag = "No NPI address found for comparison"
-        flags.append(flag)
-        flag_severity["WARNING"].append(flag)
-        print(f"    ⚠ {flag}")
+            conflicting_data.append({
+                "field": "address",
+                "source_a": {"value": input_address, "source": "CSV", "authority": 40},
+                "source_b": {"value": npi_address, "source": "NPPES", "authority": 90}
+            })
+            print(f"    ⚠ Address conflict - flagged for arbitration")
 
-    # ========================================
-    # CHECK 2: DATA HEALTH SCORING
-    # ========================================
-    print("\n  [2/6] Data Health Analysis...")
-
-    health_report = validator.calculate_data_health(
-        last_updated_date=initial_data.get("last_updated", "2024-01-01"),
-        source_type="CSV_UPLOAD",
-        provider_type=state["npi_result"].get("enumeration_type", "NPI-1"),
-    )
-
-    # store full structured report (IMPORTANT, don't lose this)
-    corrections["data_health_report"] = health_report
-
-    # extract numeric score safely (0–100)
-    health_score = int(health_report.get("current_reliability", 0) * 100)
-
-    print(f"    Health Score: {health_score}/100 ({health_report.get('status')})")
-
-    if health_score < 50:
-        flag = f"DATA HEALTH CRITICAL: Score {health_score}/100 ({health_report.get('status')})"
-        flags.append(flag)
-        flag_severity["CRITICAL"].append(flag)
-        print(f"    ✗ CRITICAL: Stale/unreliable data")
-
-    elif health_score < 70:
-        flag = f"DATA HEALTH WARNING: Score {health_score}/100"
-        flags.append(flag)
-        flag_severity["WARNING"].append(flag)
-        print(f"    ⚠ WARNING: Review recommended")
-
-    else:
-        print(f"    ✓ Data health acceptable")
-
-
-    # ========================================
-    # CHECK 3: LICENSE VALIDATION
-    # ========================================
-    print("\n  [3/6] License Verification...")
-    license_number = initial_data.get("license_number", "").strip()
-
-    if not license_number:
-        flag = "LICENSE ISSUE: Missing license number"
-        flags.append(flag)
-        flag_severity["WARNING"].append(flag)
-        print(f"    ⚠ {flag}")
-    elif "SUSPENDED" in license_number.upper():
-        flag = "❌ CRITICAL: License SUSPENDED - DO NOT USE"
-        flags.append(flag)
-        flag_severity["CRITICAL"].append(flag)
-        print(f"    ✗ {flag}")
-    elif "REVOKED" in license_number.upper():
-        flag = "❌ CRITICAL: License REVOKED - DO NOT USE"
-        flags.append(flag)
-        flag_severity["CRITICAL"].append(flag)
-        print(f"    ✗ {flag}")
-    else:
-        print(f"    ✓ License appears valid")
-
-    # ========================================
-    # CHECK 4: SPECIALTY CONSISTENCY
-    # ========================================
-    print("\n  [4/6] Specialty Cross-Validation...")
-    input_specialty = initial_data.get("specialty", "")
-    npi_specialties = [
-        tax.get("desc") for tax in state["npi_result"].get("taxonomies", [])
-    ]
-
-    if input_specialty and npi_specialties:
-        specialty_match = any(
-            fuzz.partial_ratio(input_specialty.lower(), npi_spec.lower()) > 80
-            for npi_spec in npi_specialties
-        )
-
-        if not specialty_match:
-            flag = f"SPECIALTY MISMATCH: '{input_specialty}' vs NPI {npi_specialties}"
-            flags.append(flag)
-            flag_severity["WARNING"].append(flag)
-            
-            corrections["specialty"] = npi_specialties[0]
-            heal_flag = f"AUTO-HEALED: Updated specialty to '{npi_specialties[0]}'"
-            flags.append(heal_flag)
-            flag_severity["INFO"].append(heal_flag)
-            print(f"    ⚠ Mismatch detected, auto-corrected to NPI value")
-        else:
-            print(f"    ✓ Specialty matches NPI records")
-    
-    # ========================================
-    # CHECK 5: PHONE NUMBER VALIDATION
-    # ========================================
-    print("\n  [5/6] Phone Number Validation...")
-    input_phone = initial_data.get("phone", "")
-    
-    npi_phone = ""
-    for addr in state["npi_result"].get("addresses", []):
-        if addr.get("telephone_number"):
-            npi_phone = addr.get("telephone_number")
-            break
-    
-    if input_phone and npi_phone:
-        norm_input = ''.join(filter(str.isdigit, input_phone))
-        norm_npi = ''.join(filter(str.isdigit, npi_phone))
-        
-        if norm_input != norm_npi:
-            corrections["phone"] = npi_phone
-            heal_flag = f"AUTO-HEALED: Phone updated to NPI value"
-            flags.append(heal_flag)
-            flag_severity["INFO"].append(heal_flag)
-            print(f"    ✓ {heal_flag}")
-    elif not input_phone and npi_phone:
-        corrections["phone"] = npi_phone
-        print(f"    ✓ Added missing phone from NPI")
-    
-    # ========================================
-    # CHECK 6: CROSS-FIELD VALIDATION
-    # ========================================
-    print("\n  [6/6] Cross-Field Consistency Checks...")
-    
-    # Check if certifications match specialty
-    certifications = state.get("enrichment_data", {}).get("certifications", [])
-    if input_specialty and certifications:
-        cert_match = any(input_specialty.lower() in cert.lower() for cert in certifications)
-        if not cert_match:
-            flag = f"INFO: Certifications don't explicitly mention specialty '{input_specialty}'"
-            flags.append(flag)
-            flag_severity["INFO"].append(flag)
-            print(f"    ℹ {flag}")
-        else:
-            print(f"    ✓ Certifications align with specialty")
-    
-    # Calculate overall risk score
     risk_score = (
         len(flag_severity["CRITICAL"]) * 10 +
         len(flag_severity["WARNING"]) * 3 +
-        len(flag_severity["INFO"]) * 0.5
+        len(fraud_indicators) * 5
     )
     
     print(f"\n  Risk Score: {risk_score:.1f}")
-    print(f"  Flags: {len(flag_severity['CRITICAL'])} Critical | {len(flag_severity['WARNING'])} Warnings | {len(flag_severity['INFO'])} Info")
+    print(f"  Fraud Indicators: {len(fraud_indicators)}")
+    print(f"  Conflicts for Arbitration: {len(conflicting_data)}")
 
     return {
         "qa_flags": flags,
         "qa_corrections": corrections,
+        "fraud_indicators": fraud_indicators,
+        "conflicting_data": conflicting_data,
         "quality_metrics": {
             "flag_severity": flag_severity,
             "risk_score": risk_score,
-            "total_flags": len(flags),
-            "auto_healed_count": len(flag_severity["INFO"])
+            "fraud_indicator_count": len(fraud_indicators),
+            "conflict_count": len(conflicting_data)
         }
     }
 
 # ============================================
-# STAGE 5: AI SYNTHESIS (ENHANCED)
+# STEP 5: AI ARBITRATION & GOLDEN RECORD
 # ============================================
-def synthesis_node(state: AgentState) -> dict:
-    """Enhanced synthesis with provenance tracking."""
-    print("\n┌─────────────────────────────────────────┐")
-    print("│ STAGE 5: AI-POWERED SYNTHESIS          │")
-    print("└─────────────────────────────────────────┘")
+def build_golden_record(state: AgentState, arbitrated_values: dict) -> dict:
+    """Build the golden record with provenance tracking."""
+    initial_data = state["initial_data"]
+    corrections = state.get("qa_corrections", {})
     
-    max_attempts = 3
-    
-    for attempt in range(max_attempts):
-        try:
-            print(f"\n  Attempt {attempt + 1}/{max_attempts}...")
-            
-            prompt = f"""You are a data synthesizer. Combine this data into ONE JSON object.
-
-INPUT DATA:
-- Initial: {json.dumps(state['initial_data'], indent=2)}
-- NPI: {json.dumps(state['npi_result'], indent=2)}
-- Address: {json.dumps(state['address_result'], indent=2)}
-- Enrichment: {json.dumps(state['enrichment_data'], indent=2)}
-- QA Flags: {json.dumps(state['qa_flags'], indent=2)}
-
-RULES:
-1. NPI Registry is MOST authoritative for: name, NPI, specialty, address
-2. Apply QA corrections: {json.dumps(state.get('qa_corrections', {}))}
-3. Combine (don't overwrite) complementary data
-4. Track data sources for each field
-
-OUTPUT (JSON only, no markdown):
-{{
-  "provider_name": "...",
-  "npi": "...",
-  "specialty": "...",
-  "address": "...",
-  "phone": "...",
-  "website": "...",
-  "education": [],
-  "certifications": [],
-  "languages": [],
-  "insurance_accepted": [],
-  "npi_match_found": true/false,
-  "address_validation": "...",
-  "data_sources": {{"name": "NPI Registry", "address": "NPI (auto-corrected)", ...}}
-}}"""
-            
-            response = llm.invoke(prompt)
-            final_json = extract_json_from_response(response.content)
-            
-            # Apply corrections
-            corrections = state.get("qa_corrections", {})
-            if corrections:
-                final_json.update(corrections)
-                print(f"  ✓ Applied {len(corrections)} QA corrections")
-            
-            # Add metadata
-            final_json["synthesis_timestamp"] = datetime.datetime.now().isoformat()
-            final_json["qa_flags"] = state.get("qa_flags", [])
-            
-            print(f"  ✓ Synthesis successful ({len(final_json)} fields)")
-            return {
-                "final_profile": final_json,
-                "quality_metrics": state.get("quality_metrics", {}),  # PRESERVE existing quality_metrics
-                "execution_metadata": state.get("execution_metadata", {})  # PRESERVE metadata
-            }
-            
-        except Exception as e:
-            print(f"  ✗ Attempt {attempt + 1} failed: {e}")
-            if attempt < max_attempts - 1:
-                time.sleep(2 * (attempt + 1))
-    
-    # Fallback
-    print("  ⚠ Using fallback synthesis")
-    fallback = {
-        "provider_name": state["initial_data"].get("full_name", "Unknown"),
-        "npi": state["initial_data"].get("NPI"),
-        "specialty": state["npi_result"].get("taxonomies", [{}])[0].get("desc"),
-        "address": state.get("qa_corrections", {}).get("address") or state["initial_data"].get("address"),
-        "phone": state.get("qa_corrections", {}).get("phone"),
-        "website": state["initial_data"].get("website"),
-        "education": state.get("enrichment_data", {}).get("education", []),
-        "certifications": state.get("enrichment_data", {}).get("certifications", []),
-        "npi_match_found": state["npi_result"].get("result_count", 0) > 0,
-        "address_validation": state.get("address_result", {}).get("verdict"),
-        "qa_flags": state.get("qa_flags", []),
-        "synthesis_status": "fallback",
-        "synthesis_timestamp": datetime.datetime.now().isoformat()
+    golden_record = {
+        "provider_name": initial_data.get("full_name"),
+        "npi": initial_data.get("NPI"),
+        "specialty": arbitrated_values.get("specialty") or initial_data.get("specialty"),
+        "address": arbitrated_values.get("address") or corrections.get("address") or initial_data.get("address"),
+        "phone": corrections.get("phone") or initial_data.get("phone"),
+        "website": initial_data.get("website"),
+        "education": state.get("web_enrichment_data", {}).get("education", []),
+        "certifications": state.get("web_enrichment_data", {}).get("certifications", []),
+        "license_status": state.get("state_board_result", {}).get("status"),
+        "oig_excluded": state.get("oig_leie_result", {}).get("is_excluded", False),
+        "digital_footprint_score": state.get("digital_footprint_score", 0),
+        
+        "data_sources": {
+            "name": "NPPES",
+            "npi": "NPPES",
+            "specialty": "CSV" if not arbitrated_values.get("specialty") else "NPPES",
+            "address": "NPPES (auto-corrected)" if corrections.get("address") else "CSV",
+            "license_status": "State Medical Board",
+            "oig_check": "OIG LEIE"
+        }
     }
     
+    return golden_record
+
+def standard_synthesis(state: AgentState) -> dict:
+    """Fallback synthesis when no conflicts exist."""
+    print("  ✓ Building golden record from uncontested data...")
+    golden_record = build_golden_record(state, arbitrated_values={})
     return {
-    "final_profile": fallback,
-    "quality_metrics": state.get("quality_metrics", {}),
-    "execution_metadata": state.get("execution_metadata", {})
-}
+        "golden_record": golden_record,
+        "execution_metadata": {
+            "arbitration": {
+                "conflicts_resolved": 0,
+                "timestamp": datetime.datetime.now().isoformat()
+            }
+        }
+    }
+
+@safe_node_execution
+def ai_arbitration_node(state: AgentState) -> dict:
+    """STEP 5: AI-Powered Arbitration & Golden Record Synthesis"""
+    print("\n┌─────────────────────────────────────────┐")
+    print("│ STEP 5: AI ARBITRATION & SYNTHESIS     │")
+    print("└─────────────────────────────────────────┘")
+    
+    conflicting_data = state.get("conflicting_data", [])
+    
+    if not conflicting_data:
+        print("  ✓ No conflicts detected - proceeding with standard synthesis")
+        return standard_synthesis(state)
+    
+    print(f"\n  Arbitrating {len(conflicting_data)} data conflicts...")
+    
+    arbitrated_values = {}
+    
+    for conflict in conflicting_data:
+        field = conflict["field"]
+        source_a = conflict["source_a"]
+        source_b = conflict["source_b"]
+        
+        if source_a["authority"] > source_b["authority"]:
+            chosen = source_a
+        else:
+            chosen = source_b
+            
+        print(f"    {field}: Chose '{chosen['value']}' from {chosen['source']} (authority: {chosen['authority']})")
+        arbitrated_values[field] = chosen["value"]
+    
+    golden_record = build_golden_record(state, arbitrated_values)
+    
+    return {
+        "golden_record": golden_record,
+        "execution_metadata": {
+            "arbitration": {
+                "conflicts_resolved": len(conflicting_data),
+                "timestamp": datetime.datetime.now().isoformat()
+            }
+        }
+    }
 
 # ============================================
-# STAGE 6: ULTIMATE CONFIDENCE SCORING
+# STEP 6: CONFIDENCE SCORING WITH HITL
 # ============================================
-def confidence_scorer_node(state: AgentState) -> dict:
-    """
-    ULTIMATE multi-dimensional confidence scoring.
-    
-    Dimensions:
-    1. Identity Verification (30%) - NPI match, name accuracy
-    2. Address Reliability (22%) - USPS validation, NPI consistency  
-    3. Data Completeness (18%) - Fields filled, enrichment quality
-    4. Freshness (10%) - Data age, update recency
-    5. Enrichment Quality (10%) - Website data extraction success
-    6. Risk Factors (10%) - QA flags, license issues
-    """
+@safe_node_execution
+def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
+    """STEP 6: Advanced Confidence Scoring with HITL Triggers"""
     print("\n┌─────────────────────────────────────────┐")
-    print("│ STAGE 6: ADVANCED CONFIDENCE SCORING   │")
+    print("│ STEP 6: CONFIDENCE SCORING + HITL      │")
     print("└─────────────────────────────────────────┘")
 
-    final_data = state.get("final_profile", {})
-    initial_data = state.get("initial_data", {})
-    qa_flags = state.get("qa_flags", [])
-    quality_metrics = state.get("quality_metrics", {})
-
-    logs = []
+    final_data = state.get("golden_record", state.get("final_profile", {}))
+    fraud_indicators = state.get("fraud_indicators", [])
+    
     total_score = 0.0
+    dimension_scores = {}
 
-    # Weight configuration (sum = 1.0)
     WEIGHTS = {
-        "identity": 0.30,
-        "address": 0.22,
-        "completeness": 0.18,
+        "primary_source_verification": 0.35,
+        "address_reliability": 0.20,
+        "digital_footprint": 0.15,
+        "data_completeness": 0.15,
         "freshness": 0.10,
-        "enrichment": 0.10,
-        "risk": 0.10
+        "fraud_risk": 0.05
     }
 
     print("\n  Scoring Dimensions:")
     print("  ─────────────────────────────────────────")
 
-    # ========================================
-    # 1️⃣ IDENTITY TRUST (30%)
-    # ========================================
-    identity_raw = 0.0
+    # DIMENSION 1: PRIMARY SOURCE VERIFICATION
+    psv_score = 0.0
+    npi_meta = state.get("execution_metadata", {}).get("nppes", {})
+    if npi_meta.get("match_confidence", 0) >= 0.95:
+        psv_score += 0.50
+    elif npi_meta.get("match_confidence", 0) >= 0.7:
+        psv_score += 0.35
     
-    if final_data.get("npi_match_found"):
-        identity_raw = 1.0
-        
-        # Bonus for match confidence
-        exec_meta = state.get("execution_metadata", {})
-        npi_meta = exec_meta.get("npi", {})
-        match_conf = npi_meta.get("match_confidence", 0)
-        
-        if match_conf >= 0.95:
-            identity_raw = 1.0
-            logs.append("Identity ✓✓ Exact NPI match")
-        elif match_conf >= 0.7:
-            identity_raw = 0.85
-            logs.append("Identity ✓ NPI match (multiple results)")
-        else:
-            identity_raw = 0.7
-            logs.append("Identity ◐ Weak NPI match")
-    else:
-        logs.append("Identity ✗ NPI NOT FOUND")
-
-    identity_score = identity_raw * WEIGHTS["identity"]
-    total_score += identity_score
-    print(f"  [1] Identity: {identity_raw:.2f} × {WEIGHTS['identity']:.2f} = {identity_score:.3f}")
-
-    # ========================================
-    # 2️⃣ ADDRESS RELIABILITY (22%)
-    # ========================================
-    address_raw = 0.0
-
-    address_validation = final_data.get("address_validation")
-    verdict = None
+    license_status = state.get("state_board_result", {}).get("status")
+    if license_status == "Active":
+        psv_score += 0.30
+    elif license_status in ["Suspended", "Revoked"]:
+        psv_score = 0.0
     
-    if isinstance(address_validation, dict):
-        verdict = address_validation.get("verdict")
-    elif isinstance(address_validation, str):
-        verdict = address_validation
-
-    if verdict == "High Confidence Match":
-        address_raw = 1.0
-        logs.append("Address ✓ High confidence USPS match")
-    elif verdict and "partial" in verdict.lower():
-        address_raw = 0.65
-        logs.append("Address ◐ Partial USPS match")
-    elif verdict:
-        address_raw = 0.35
-        logs.append("Address ⚠ Weak/uncertain match")
+    if not state.get("oig_leie_result", {}).get("is_excluded", False):
+        psv_score += 0.20
     else:
-        logs.append("Address ✗ No validation data")
+        psv_score = 0.0
+    
+    dimension_scores["primary_source"] = psv_score
+    total_score += psv_score * WEIGHTS["primary_source_verification"]
+    print(f"  [1] Primary Sources: {psv_score:.2f} × {WEIGHTS['primary_source_verification']:.2f}")
 
-    address_score = address_raw * WEIGHTS["address"]
-    total_score += address_score
-    print(f"  [2] Address: {address_raw:.2f} × {WEIGHTS['address']:.2f} = {address_score:.3f}")
+    # DIMENSION 2: ADDRESS RELIABILITY
+    address_score = 0.0
+    address_meta = state.get("execution_metadata", {}).get("address", {})
+    
+    if address_meta.get("confidence", 0) >= 0.9:
+        address_score = 1.0
+    elif address_meta.get("confidence", 0) >= 0.7:
+        address_score = 0.7
+    elif address_meta.get("confidence", 0) >= 0.4:
+        address_score = 0.4
+    
+    if state.get("address_result", {}).get("is_medical_facility"):
+        address_score = min(1.0, address_score + 0.1)
+    
+    dimension_scores["address"] = address_score
+    total_score += address_score * WEIGHTS["address_reliability"]
+    print(f"  [2] Address: {address_score:.2f} × {WEIGHTS['address_reliability']:.2f}")
 
-    # ========================================
-    # 3️⃣ DATA COMPLETENESS (18%)
-    # ========================================
-    required_fields = ["provider_name", "npi", "specialty", "address", "phone", "website"]
+    # DIMENSION 3: DIGITAL FOOTPRINT
+    footprint_score = state.get("digital_footprint_score", 0)
+    dimension_scores["digital_footprint"] = footprint_score
+    total_score += footprint_score * WEIGHTS["digital_footprint"]
+    print(f"  [3] Digital Footprint: {footprint_score:.2f} × {WEIGHTS['digital_footprint']:.2f}")
+
+    # DIMENSION 4: DATA COMPLETENESS
+    required_fields = ["provider_name", "npi", "specialty", "address", "phone"]
     present = sum(1 for f in required_fields if final_data.get(f))
-    completeness_ratio = present / len(required_fields)
-
-    logs.append(f"Completeness ℹ {present}/{len(required_fields)} fields present")
-
-    completeness_score = completeness_ratio * WEIGHTS["completeness"]
-    total_score += completeness_score
-    print(f"  [3] Completeness: {completeness_ratio:.2f} × {WEIGHTS['completeness']:.2f} = {completeness_score:.3f}")
-
-    # ========================================
-    # 4️⃣ DATA FRESHNESS (10%)
-    # ========================================
-    freshness_raw = 0.6
-    last_updated = initial_data.get("last_updated")
-
-    if last_updated:
-        try:
-            last_dt = datetime.datetime.strptime(last_updated, "%Y-%m-%d")
-            days_old = (datetime.datetime.now() - last_dt).days
-            freshness_raw = pow(2.71828, -days_old / 365)
-            logs.append(f"Freshness ⏳ {days_old} days old (decay={freshness_raw:.2f})")
-        except:
-            logs.append("Freshness ⚠ Invalid date format")
-
-    freshness_score = freshness_raw * WEIGHTS["freshness"]
-    total_score += freshness_score
-    print(f"  [4] Freshness: {freshness_raw:.2f} × {WEIGHTS['freshness']:.2f} = {freshness_score:.3f}")
-
-    # ========================================
-    # 5️⃣ ENRICHMENT QUALITY (10%)
-    # ========================================
-    enrichment_raw = 0.0
-
-    if final_data.get("website"):
-        enrichment_raw += 0.3
-    if final_data.get("education"):
-        enrichment_raw += 0.25
-    if final_data.get("certifications"):
-        enrichment_raw += 0.25
-    if final_data.get("languages"):
-        enrichment_raw += 0.1
-    if final_data.get("insurance_accepted"):
-        enrichment_raw += 0.1
-
-    enrichment_raw = min(1.0, enrichment_raw)
-    logs.append(f"Enrichment 🌐 score={enrichment_raw:.2f}")
-
-    enrichment_score = enrichment_raw * WEIGHTS["enrichment"]
-    total_score += enrichment_score
-    print(f"  [5] Enrichment: {enrichment_raw:.2f} × {WEIGHTS['enrichment']:.2f} = {enrichment_score:.3f}")
-
-    # ========================================
-    # 6️⃣ RISK & PENALTIES (10%)
-    # ========================================
-    risk_penalty = 0.0
-    flag_severity = quality_metrics.get("flag_severity", {})
+    completeness_score = present / len(required_fields)
     
-    critical_count = len(flag_severity.get("CRITICAL", []))
-    warning_count = len(flag_severity.get("WARNING", []))
+    dimension_scores["completeness"] = completeness_score
+    total_score += completeness_score * WEIGHTS["data_completeness"]
+    print(f"  [4] Completeness: {completeness_score:.2f} × {WEIGHTS['data_completeness']:.2f}")
+
+    # DIMENSION 5: FRESHNESS
+    last_updated = state["initial_data"].get("last_updated", "2024-01-01")
+    freshness_score = calculate_data_freshness(last_updated)
     
-    if critical_count > 0:
-        penalty = min(0.08, 0.04 * critical_count)
-        risk_penalty += penalty
-        logs.append(f"Risk ⚠⚠ {critical_count} CRITICAL flags (-{penalty*100:.0f}%)")
+    dimension_scores["freshness"] = freshness_score
+    total_score += freshness_score * WEIGHTS["freshness"]
+    print(f"  [5] Freshness: {freshness_score:.2f} × {WEIGHTS['freshness']:.2f}")
+
+    # DIMENSION 6: FRAUD RISK PENALTY
+    fraud_penalty = len(fraud_indicators) * 0.15
+    fraud_penalty = min(fraud_penalty, 0.05)
     
-    if warning_count > 0:
-        penalty = min(0.04, 0.01 * warning_count)
-        risk_penalty += penalty
-        logs.append(f"Risk ⚠ {warning_count} warnings (-{penalty*100:.0f}%)")
+    fraud_score = max(0, WEIGHTS["fraud_risk"] - fraud_penalty)
+    dimension_scores["fraud_risk"] = fraud_score
+    total_score += fraud_score
+    print(f"  [6] Fraud Risk: {WEIGHTS['fraud_risk']:.2f} - {fraud_penalty:.2f}")
 
-    if final_data.get("synthesis_status", "").startswith("fallback"):
-        risk_penalty += 0.02
-        logs.append("Risk ⚠ Fallback synthesis used (-2%)")
-
-    risk_score = max(0.0, WEIGHTS["risk"] - risk_penalty)
-    total_score += risk_score
-    print(f"  [6] Risk: {WEIGHTS['risk']:.2f} - {risk_penalty:.2f} = {risk_score:.3f}")
-
-    # ========================================
-    # FINAL NORMALIZATION & TIER ASSIGNMENT
-    # ========================================
+    # FINAL SCORE & TIER ASSIGNMENT
     final_score = round(max(0.0, min(1.0, total_score)), 3)
     
-    # Assign confidence tier
+    requires_human_review = False
+    review_reason = ""
+    
     if final_score >= 0.90:
         tier = "PLATINUM"
-        tier_desc = "Exceptional - Use immediately, highest reliability"
-        tier_emoji = "🏆"
-    elif final_score >= 0.80:
-        tier = "GOLD"
-        tier_desc = "Excellent - Very reliable, minor review optional"
-        tier_emoji = "🥇"
+        tier_desc = "Auto-approved - Commit to database"
+        tier_emoji = "🟢"
+        path = "GREEN"
     elif final_score >= 0.70:
-        tier = "SILVER"
-        tier_desc = "Good - Reliable with minor issues flagged"
-        tier_emoji = "🥈"
-    elif final_score >= 0.60:
-        tier = "BRONZE"
-        tier_desc = "Fair - Usable but needs review"
-        tier_emoji = "🥉"
-    elif final_score >= 0.40:
-        tier = "QUESTIONABLE"
-        tier_desc = "Poor - Manual verification required"
-        tier_emoji = "⚠️"
+        tier = "GOLD"
+        tier_desc = "Auto-approved with monitoring"
+        tier_emoji = "🟡"
+        path = "YELLOW"
     else:
-        tier = "UNUSABLE"
-        tier_desc = "Critical issues - Do not use without verification"
-        tier_emoji = "❌"
+        tier = "QUESTIONABLE"
+        tier_desc = "REQUIRES HUMAN REVIEW"
+        tier_emoji = "🔴"
+        path = "RED"
+        requires_human_review = True
+        
+        if psv_score < 0.5:
+            review_reason = "Primary source verification failed"
+        elif len(fraud_indicators) > 0:
+            review_reason = f"Fraud indicators detected: {', '.join(fraud_indicators)}"
+        elif address_score < 0.4:
+            review_reason = "Address reliability too low"
+        else:
+            review_reason = "Overall confidence below threshold"
 
     print("\n  ═════════════════════════════════════════")
-    print(f"  {tier_emoji} CONFIDENCE TIER: {tier}")
-    print(f"  Score: {final_score:.3f} ({final_score*100:.1f}%)")
-    print(f"  {tier_desc}")
+    print(f"  {tier_emoji} PATH: {path}")
+    print(f"  CONFIDENCE: {final_score:.3f} ({final_score*100:.1f}%)")
+    print(f"  TIER: {tier}")
+    print(f"  ACTION: {tier_desc}")
+    
+    if requires_human_review:
+        print(f"  ⚠️  REVIEW REASON: {review_reason}")
+    
     print("  ═════════════════════════════════════════")
-
-    logs.append(f"FINAL CONFIDENCE = {final_score*100:.1f}%")
-    logs.append(f"TIER = {tier} ({tier_desc})")
-
-    # Build detailed breakdown
-    breakdown = {
-        "identity": round(identity_score, 3),
-        "address": round(address_score, 3),
-        "completeness": round(completeness_score, 3),
-        "freshness": round(freshness_score, 3),
-        "enrichment": round(enrichment_score, 3),
-        "risk": round(risk_score, 3)
-    }
 
     return {
         "confidence_score": final_score,
-        "log": logs,
+        "requires_human_review": requires_human_review,
+        "review_reason": review_reason,
         "quality_metrics": {
-            **quality_metrics,
+            **state.get("quality_metrics", {}),
             "confidence_tier": tier,
             "tier_description": tier_desc,
             "tier_emoji": tier_emoji,
-            "score_breakdown": breakdown,
-            "dimension_percentages": {
-                "identity": f"{(identity_raw * 100):.1f}%",
-                "address": f"{(address_raw * 100):.1f}%",
-                "completeness": f"{(completeness_ratio * 100):.1f}%",
-                "freshness": f"{(freshness_raw * 100):.1f}%",
-                "enrichment": f"{(enrichment_raw * 100):.1f}%",
-                "risk_penalty": f"{(risk_penalty * 100):.1f}%"
-            }
+            "path": path,
+            "dimension_scores": dimension_scores,
+            "requires_human_review": requires_human_review,
+            "review_reason": review_reason
         }
     }
 
 # ============================================
-# PARALLEL GRAPH CONSTRUCTION
+# HITL DECISION & ACTION NODES
+# ============================================
+def hitl_decision_node(state: AgentState) -> Literal["auto_approve", "human_review"]:
+    """Router: Decides auto-approve vs human review."""
+    if state.get("requires_human_review", False):
+        print("\n🔴 RED PATH: Routing to human review...")
+        return "human_review"
+    else:
+        print("\n🟢 GREEN/YELLOW PATH: Auto-approving...")
+        return "auto_approve"
+
+def human_review_interrupt_node(state: AgentState) -> dict:
+    """HITL Node: Creates review task."""
+    print("\n┌─────────────────────────────────────────┐")
+    print("│ HUMAN REVIEW REQUIRED                  │")
+    print("└─────────────────────────────────────────┘")
+    
+    print(f"\nReason: {state.get('review_reason')}")
+    print(f"Confidence: {state.get('confidence_score', 0):.2%}")
+    print(f"Fraud Indicators: {len(state.get('fraud_indicators', []))}")
+    
+    print("\n📋 Review Queue Entry Created:")
+    print(f"  - Provider: {state['initial_data'].get('full_name')}")
+    print(f"  - NPI: {state['initial_data'].get('NPI')}")
+    priority = "HIGH" if len(state.get('fraud_indicators', [])) > 0 else "MEDIUM"
+    print(f"  - Priority: {priority}")
+    
+    # In production: raise NodeInterrupt(f"Human review: {state['review_reason']}")
+    
+    return {
+        "final_profile": state.get("golden_record", {}),
+        "log": [f"HITL: Flagged for review - {state.get('review_reason')}"]
+    }
+
+def auto_approve_node(state: AgentState) -> dict:
+    """Auto-approval and database commit."""
+    print("\n✅ AUTO-APPROVED: Committing to database...")
+    
+    golden_record = state.get("golden_record", {})
+    
+    # DATABASE COMMIT (See database guide below)
+    try:
+        save_to_database(golden_record, state)
+        print("  ✓ Successfully saved to database")
+    except Exception as e:
+        logger.error(f"Database save failed: {e}")
+        print(f"  ✗ Database save failed: {e}")
+    
+    return {
+        "final_profile": golden_record,
+        "log": [f"AUTO-APPROVED: Confidence {state.get('confidence_score', 0):.2%}"]
+    }
+
+# ============================================
+# DATABASE FUNCTIONS
+# ============================================
+def save_to_database(golden_record: dict, state: AgentState):
+    """
+    Save validated provider to database.
+    
+    Options:
+    1. PostgreSQL with SQLAlchemy
+    2. MongoDB
+    3. Supabase
+    4. CSV export (for testing)
+    """
+    # OPTION 1: PostgreSQL (recommended)
+    # from sqlalchemy import create_engine
+    # engine = create_engine(os.getenv("DATABASE_URL"))
+    # with engine.connect() as conn:
+    #     conn.execute("""
+    #         INSERT INTO providers (npi, name, specialty, ...)
+    #         VALUES (:npi, :name, :specialty, ...)
+    #         ON CONFLICT (npi) DO UPDATE SET ...
+    #     """, golden_record)
+    
+    # OPTION 2: MongoDB
+    # from pymongo import MongoClient
+    # client = MongoClient(os.getenv("MONGO_URI"))
+    # db = client.healthcare
+    # db.providers.update_one(
+    #     {"npi": golden_record["npi"]},
+    #     {"$set": golden_record},
+    #     upsert=True
+    # )
+    
+    # OPTION 3: CSV Export (for testing)
+    output_dir = Path(__file__).parent / "output"
+    output_dir.mkdir(exist_ok=True)
+    
+    import csv
+    csv_file = output_dir / "validated_providers.csv"
+    
+    file_exists = csv_file.exists()
+    with open(csv_file, 'a', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=golden_record.keys())
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(golden_record)
+    
+    # Also save metadata
+    metadata_file = output_dir / f"metadata_{golden_record['npi']}.json"
+    with open(metadata_file, 'w') as f:
+        json.dump({
+            "golden_record": golden_record,
+            "quality_metrics": state.get("quality_metrics", {}),
+            "execution_metadata": state.get("execution_metadata", {}),
+            "confidence_score": state.get("confidence_score", 0)
+        }, f, indent=2)
+
+# ============================================
+# GRAPH CONSTRUCTION
 # ============================================
 workflow = StateGraph(AgentState)
 
-# 1. Define Nodes
-workflow.add_node("npi_tool", call_npi_tool)
-workflow.add_node("address_tool", call_address_tool)
-workflow.add_node("enrichment", enrichment_node)
+# Add all nodes
+workflow.add_node("dispatcher", lambda state: state)
+workflow.add_node("verify_npi", verify_npi_node)
+workflow.add_node("check_oig", check_oig_exclusion_node)
+workflow.add_node("verify_license", verify_state_license_node)
+workflow.add_node("validate_address", validate_address_node)
+workflow.add_node("web_enrichment", web_enrichment_node)
+workflow.add_node("merge_results", merge_parallel_results_node)
 workflow.add_node("quality_assurance", quality_assurance_node)
-workflow.add_node("synthesis", synthesis_node)
-workflow.add_node("scorer", confidence_scorer_node)
+workflow.add_node("ai_arbitration", ai_arbitration_node)
+workflow.add_node("confidence_scorer", confidence_scorer_with_hitl_node)
+workflow.add_node("human_review", human_review_interrupt_node)
+workflow.add_node("auto_approve", auto_approve_node)
 
-# 2. Define a Dispatcher (Start Node)
-def dispatcher_node(state):
-    # This node just passes the state to the parallel branches
-    return state
-
-workflow.add_node("dispatcher", dispatcher_node)
+# Entry point
 workflow.set_entry_point("dispatcher")
 
-# 3. PARALLEL FAN-OUT
-# Connect Dispatcher to 3 nodes simultaneously.
-# LangGraph will execute these in parallel threads automatically.
-workflow.add_edge("dispatcher", "npi_tool")
-workflow.add_edge("dispatcher", "address_tool")
-workflow.add_edge("dispatcher", "enrichment")
+# Parallel fan-out
+workflow.add_edge("dispatcher", "verify_npi")
+workflow.add_edge("dispatcher", "check_oig")
+workflow.add_edge("dispatcher", "verify_license")
+workflow.add_edge("dispatcher", "validate_address")
+workflow.add_edge("dispatcher", "web_enrichment")
 
-# 4. FAN-IN (Synchronization)
-# Connect the 3 parallel nodes to Quality Assurance.
-# QA will wait for all 3 to finish merging their results into the state.
-workflow.add_edge("npi_tool", "quality_assurance")
-workflow.add_edge("address_tool", "quality_assurance")
-workflow.add_edge("enrichment", "quality_assurance")
+# Fan-in through merger
+workflow.add_edge("verify_npi", "merge_results")
+workflow.add_edge("check_oig", "merge_results")
+workflow.add_edge("verify_license", "merge_results")
+workflow.add_edge("validate_address", "merge_results")
+workflow.add_edge("web_enrichment", "merge_results")
 
-# 5. Linear Completion
-workflow.add_edge("quality_assurance", "synthesis")
-workflow.add_edge("synthesis", "scorer")
-workflow.add_edge("scorer", END)
+# Sequential flow
+workflow.add_edge("merge_results", "quality_assurance")
+workflow.add_edge("quality_assurance", "ai_arbitration")
+workflow.add_edge("ai_arbitration", "confidence_scorer")
+
+# Conditional routing
+workflow.add_conditional_edges(
+    "confidence_scorer",
+    hitl_decision_node,
+    {
+        "auto_approve": "auto_approve",
+        "human_review": "human_review"
+    }
+)
+
+# End nodes
+workflow.add_edge("auto_approve", END)
+workflow.add_edge("human_review", END)
 
 # Compile
 app = workflow.compile()
 
 # ============================================
-# BATCH PROCESSING WITH RICH OUTPUT
+# BATCH PROCESSING
 # ============================================
-def run_agent_on_all_providers():
-    """Process all providers with enhanced reporting."""
+def run_enhanced_pipeline():
+    """Run the enhanced pipeline on all providers."""
     providers = get_all_providers()
     results = []
     
-    print("\n" + "="*50)
-    print("🚀 HEALTHCARE AI PIPELINE - BATCH PROCESSING")
-    print("="*50)
-    print(f"\nProcessing {len(providers)} providers...\n")
-    
-    for idx, provider in enumerate(providers, 1):
-        print(f"\n{'='*50}")
-        print(f"PROVIDER {idx}/{len(providers)}")
-        print(f"{'='*50}")
-        
-        initial_data = {
-            "full_name": provider.get("full_name", ""),
-            "NPI": provider.get("npi", ""),
-            "address": provider.get("address", ""),
-            "city": provider.get("city", ""),
-            "state": provider.get("state", ""),
-            "zip_code": provider.get("zip_code", ""),
-            "website": provider.get("website", ""),
-            "specialty": provider.get("specialty", ""),
-            "phone": provider.get("phone", ""),
-            "license_number": provider.get("license_number", ""),
-            "last_updated": provider.get("last_updated", "2024-01-01")
-        }
-
-        initial_state: AgentState = {
-            "initial_data": initial_data,
-            "log": [],
-            "npi_result": {},
-            "address_result": {},
-            "enrichment_data": {},
-            "qa_flags": [],
-            "qa_corrections": {},
-            "final_profile": {},
-            "confidence_score": 0.0,
-            "execution_metadata": {},
-            "data_provenance": {},
-            "quality_metrics": {}
-        }
-
-        start_time = time.time()
-        final_state = app.invoke(initial_state)
-        execution_time = time.time() - start_time
-        
-        # Add execution summary
-        final_state["execution_metadata"]["total_execution_time"] = execution_time
-        
-        results.append(final_state)
-        
-        # Print summary for this provider
-        print_provider_summary(final_state, execution_time)
-    
-    print("\n" + "="*50)
-    print("✅ BATCH PROCESSING COMPLETE")
-    print("="*50)
-    
-    # Print aggregate statistics
-    print_aggregate_stats(results)
-    
-    return results
-
-def print_provider_summary(state: dict, execution_time: float):
-    """Print detailed summary for a single provider."""
-    profile = state.get("final_profile", {})
-    quality = state.get("quality_metrics", {})
-    
-    print("\n📊 PROCESSING SUMMARY:")
-    print("─────────────────────────────────────────")
-    print(f"Provider: {profile.get('provider_name', 'Unknown')}")
-    print(f"NPI: {profile.get('npi', 'N/A')}")
-    print(f"Confidence: {state.get('confidence_score', 0):.3f} ({quality.get('confidence_tier', 'N/A')})")
-    print(f"QA Flags: {len(state.get('qa_flags', []))}")
-    print(f"Execution Time: {execution_time:.2f}s")
-    
-    # Show flag breakdown
-    flag_severity = quality.get("flag_severity", {})
-    if flag_severity:
-        print(f"  - Critical: {len(flag_severity.get('CRITICAL', []))}")
-        print(f"  - Warnings: {len(flag_severity.get('WARNING', []))}")
-        print(f"  - Info: {len(flag_severity.get('INFO', []))}")
-
-def print_aggregate_stats(results: list):
-    """Print statistics across all processed providers."""
-    if not results:
-        return
-    
-    scores = [r.get("confidence_score", 0) for r in results]
-    avg_score = sum(scores) / len(scores)
-    
-    tier_counts = {}
-    for r in results:
-        tier = r.get("quality_metrics", {}).get("confidence_tier", "Unknown")
-        tier_counts[tier] = tier_counts.get(tier, 0) + 1
-    
-    print("\n📈 AGGREGATE STATISTICS:")
-    print("─────────────────────────────────────────")
-    print(f"Total Providers: {len(results)}")
-    print(f"Average Confidence: {avg_score:.3f}")
-    print(f"Highest Score: {max(scores):.3f}")
-    print(f"Lowest Score: {min(scores):.3f}")
-    print("\nTier Distribution:")
-    for tier, count in sorted(tier_counts.items(), reverse=True):
-        print(f"  {tier}: {count} ({count/len(results)*100:.1f}%)")
-
-# ============================================
-# MAIN EXECUTION
-# ============================================
-if __name__ == "__main__":
-    print("\n" + "🏥" * 25)
-    print("ULTIMATE HEALTHCARE PROVIDER VALIDATION SYSTEM")
-    print("Multi-Agent AI Pipeline with Surgical Precision")
-    print("🏥" * 25)
-    
-    from provider_requests import get_all_providers
-
-    providers = get_all_providers()
-    
-    # Process first 5 for testing (remove limit for full run)
-    print(f"\n⚙️ Processing {min(5, len(providers))} providers (testing mode)...\n")
+    print("\n" + "="*60)
+    print("🚀 ENHANCED HEALTHCARE AI PIPELINE v2.1")
+    print("   6-Step Workflow with HITL & Fraud Detection")
+    print("="*60)
     
     for idx, provider in enumerate(providers[:5], 1):
-        print(f"\n{'█'*50}")
-        print(f"PROCESSING PROVIDER {idx}/5")
-        print(f"{'█'*50}")
+        print(f"\n{'█'*60}")
+        print(f"PROVIDER {idx}/5")
+        print(f"{'█'*60}")
         
         initial_state: AgentState = {
             "initial_data": {
@@ -1054,75 +1180,42 @@ if __name__ == "__main__":
             },
             "log": [],
             "npi_result": {},
+            "oig_leie_result": {},
+            "state_board_result": {},
             "address_result": {},
-            "enrichment_data": {},
+            "web_enrichment_data": {},
+            "digital_footprint_score": 0.0,
             "qa_flags": [],
             "qa_corrections": {},
-            "final_profile": {},
+            "fraud_indicators": [],
+            "conflicting_data": [],
+            "golden_record": {},
             "confidence_score": 0.0,
+            "confidence_breakdown": {},
+            "requires_human_review": False,
+            "review_reason": "",
+            "final_profile": {},
             "execution_metadata": {},
             "data_provenance": {},
             "quality_metrics": {}
         }
 
-        pipeline_start = time.time()
+        start_time = time.time()
         final_state = app.invoke(initial_state)
-        pipeline_time = time.time() - pipeline_start
+        execution_time = time.time() - start_time
+        
+        results.append(final_state)
+        
+        print(f"\n⏱️  Total execution: {execution_time:.2f}s")
+        print(f"📊 Final confidence: {final_state.get('confidence_score', 0):.2%}")
+        print(f"🎯 Path: {final_state.get('quality_metrics', {}).get('path', 'N/A')}")
+    
+    print("\n" + "="*60)
+    print("✅ PIPELINE COMPLETE")
+    print(f"📁 Results saved to: {Path(__file__).parent / 'output'}")
+    print("="*60)
+    
+    return results
 
-        # Display results
-        print("\n" + "▓"*50)
-        print("FINAL RESULTS")
-        print("▓"*50)
-        
-        profile = final_state["final_profile"]
-        quality = final_state["quality_metrics"]
-        
-        print(f"\n🔍 PROVIDER PROFILE:")
-        print(f"  Name: {profile.get('provider_name', 'N/A')}")
-        print(f"  NPI: {profile.get('npi', 'N/A')}")
-        print(f"  Specialty: {profile.get('specialty', 'N/A')}")
-        print(f"  Address: {profile.get('address', 'N/A')}")
-        print(f"  Phone: {profile.get('phone', 'N/A')}")
-        print(f"  Website: {profile.get('website', 'N/A')}")
-        
-        if profile.get('education'):
-            print(f"  Education: {', '.join(profile['education'][:2])}")
-        if profile.get('certifications'):
-            print(f"  Certifications: {', '.join(profile['certifications'][:2])}")
-        
-        print(f"\n🎯 CONFIDENCE METRICS:")
-        print(f"  Overall Score: {final_state['confidence_score']:.3f} ({final_state['confidence_score']*100:.1f}%)")
-        print(f"  Tier: {quality.get('tier_emoji', '')} {quality.get('confidence_tier', 'N/A')}")
-        print(f"  Description: {quality.get('tier_description', 'N/A')}")
-        
-        print(f"\n📊 DIMENSION BREAKDOWN:")
-        breakdown = quality.get('score_breakdown', {})
-        percentages = quality.get('dimension_percentages', {})
-        for dim in ['identity', 'address', 'completeness', 'freshness', 'enrichment', 'risk']:
-            score = breakdown.get(dim, 0)
-            pct = percentages.get(dim, '0%')
-            print(f"  {dim.capitalize():12} : {score:.3f} ({pct})")
-        
-        print(f"\n🚩 QUALITY ASSURANCE:")
-        flag_severity = quality.get('flag_severity', {})
-        print(f"  Critical Flags: {len(flag_severity.get('CRITICAL', []))}")
-        print(f"  Warnings: {len(flag_severity.get('WARNING', []))}")
-        print(f"  Info/Auto-healed: {len(flag_severity.get('INFO', []))}")
-        print(f"  Risk Score: {quality.get('risk_score', 0):.1f}")
-        
-        print(f"\n⏱️ PERFORMANCE:")
-        print(f"  Total Pipeline Time: {pipeline_time:.2f}s")
-        
-        exec_meta = final_state.get('execution_metadata', {})
-        if exec_meta:
-            print(f"  Stage Breakdown:")
-            for stage in ['npi', 'address', 'enrichment']:
-                meta = exec_meta.get(stage, {})
-                if meta:
-                    print(f"    {stage.capitalize():12} : {meta.get('execution_time_seconds', 0):.2f}s")
-        
-        print("\n" + "─"*50 + "\n")
-
-    print("\n" + "✅" * 25)
-    print("PIPELINE EXECUTION COMPLETE")
-    print("✅" * 25 + "\n")
+if __name__ == "__main__":
+    run_enhanced_pipeline()

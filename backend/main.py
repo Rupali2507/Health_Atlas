@@ -7,11 +7,12 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from asyncio import Queue
+from typing import Dict, Any
 
 from agent import app as validation_agent_app
 from tools import parse_provider_pdf
 
-app = FastAPI(title="Health Atlas Provider Validator")
+app = FastAPI(title="Health Atlas Provider Validator v2.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,17 +31,78 @@ app.add_middleware(
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy", "version": "2.1"}
 
 # Configuration for parallel processing
-MAX_CONCURRENT_WORKERS = 10  # Adjust based on your API rate limits
+MAX_CONCURRENT_WORKERS = 5  # Reduced for stability with enhanced validation
+
+
+def normalize_provider_data(provider_info: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize provider data to match AgentState initial_data schema."""
+    # Handle both CSV and PDF field naming conventions
+    return {
+        "full_name": provider_info.get("full_name") or provider_info.get("fullName", ""),
+        "NPI": provider_info.get("NPI") or provider_info.get("npi", ""),
+        "address": provider_info.get("address", ""),
+        "city": provider_info.get("city", ""),
+        "state": provider_info.get("state", ""),
+        "zip_code": provider_info.get("zip_code") or provider_info.get("zipCode", ""),
+        "website": provider_info.get("website", ""),
+        "specialty": provider_info.get("specialty", ""),
+        "phone": provider_info.get("phone", ""),
+        "license_number": provider_info.get("license_number") or provider_info.get("license", ""),
+        "last_updated": provider_info.get("last_updated") or provider_info.get("lastUpdated", "2024-01-01")
+    }
+
+
+def format_result_for_frontend(final_result: Dict[str, Any], provider_info: Dict[str, Any]) -> Dict[str, Any]:
+    """Format the enhanced agent result for frontend consumption."""
+    quality_metrics = final_result.get("quality_metrics", {})
+    
+    return {
+        "original_data": provider_info,
+        "final_profile": final_result.get("final_profile") or final_result.get("golden_record", {}),
+        "confidence_score": final_result.get("confidence_score", 0),
+        "confidence_tier": quality_metrics.get("confidence_tier", "UNKNOWN"),
+        "tier_description": quality_metrics.get("tier_description", ""),
+        "path": quality_metrics.get("path", "UNKNOWN"),
+        "requires_human_review": final_result.get("requires_human_review", False),
+        "review_reason": final_result.get("review_reason", ""),
+        
+        # QA Results
+        "qa_flags": final_result.get("qa_flags", []),
+        "fraud_indicators": final_result.get("fraud_indicators", []),
+        "qa_corrections": final_result.get("qa_corrections", {}),
+        
+        # Detailed Metrics
+        "quality_metrics": {
+            **quality_metrics,
+            "dimension_scores": quality_metrics.get("dimension_scores", {}),
+            "flag_severity": quality_metrics.get("flag_severity", {}),
+            "risk_score": quality_metrics.get("risk_score", 0),
+            "fraud_indicator_count": quality_metrics.get("fraud_indicator_count", 0),
+            "conflict_count": quality_metrics.get("conflict_count", 0)
+        },
+        
+        # Execution Metadata
+        "execution_metadata": final_result.get("execution_metadata", {}),
+        
+        # Source Verification Status
+        "verification_status": {
+            "nppes_verified": bool(final_result.get("npi_result", {}).get("result_count", 0) > 0),
+            "oig_clear": not final_result.get("oig_leie_result", {}).get("is_excluded", False),
+            "license_active": final_result.get("state_board_result", {}).get("status") == "Active",
+            "address_validated": final_result.get("address_result", {}).get("is_medical_facility", False),
+            "digital_footprint_score": final_result.get("digital_footprint_score", 0)
+        }
+    }
 
 
 @app.post("/validate-file")
 async def validate_file(file: UploadFile = File(...)):
     """
-    API endpoint to handle file uploads and stream back results in parallel.
-    Processes multiple providers concurrently for better throughput.
+    Enhanced API endpoint with parallel processing and streaming results.
+    Now includes full HITL workflow and fraud detection.
     """
     temp_filename = f"temp_{uuid.uuid4()}_{file.filename}"
 
@@ -55,50 +117,92 @@ async def validate_file(file: UploadFile = File(...)):
 
             provider_list = []
             if file.filename.endswith('.csv'):
-                yield f"data: {json.dumps({'type': 'log', 'content': 'Reading CSV file...'})}\n\n"
+                yield f"data: {json.dumps({'type': 'log', 'content': '📄 Reading CSV file...'})}\n\n"
                 df = pd.read_csv(temp_filename, dtype=str).fillna("")
                 provider_list = df.to_dict(orient='records')
             
             elif file.filename.endswith('.pdf'):
-                yield f"data: {json.dumps({'type': 'log', 'content': 'Parsing PDF with Vision AI... This may take a moment.'})}\n\n"
+                yield f"data: {json.dumps({'type': 'log', 'content': '🔍 Parsing PDF with Vision AI... This may take a moment.'})}\n\n"
                 provider_list = parse_provider_pdf(temp_filename)
                 if provider_list and isinstance(provider_list[0], dict) and provider_list[0].get("error"):
                     error_msg = provider_list[0]["error"]
-                    yield f"data: {json.dumps({'type': 'log', 'content': f'PDF Parsing Error: {error_msg}'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'log', 'content': f'❌ PDF Parsing Error: {error_msg}'})}\n\n"
                     provider_list = []
 
             total_records = len(provider_list)
-            yield f"data: {json.dumps({'type': 'log', 'content': f'Found {total_records} records to process in parallel with {MAX_CONCURRENT_WORKERS} workers.'})}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'content': f'🚀 Found {total_records} records. Processing with {MAX_CONCURRENT_WORKERS} parallel workers...'})}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'content': f'📋 Enhanced Pipeline: NPPES → OIG → License → Address → Web → QA → AI Arbitration → Confidence Scoring'})}\n\n"
             await asyncio.sleep(0)
 
             # Worker function to process individual providers
             async def worker(provider_info, index):
-                """Process a single provider and put result in queue."""
+                """Process a single provider through the enhanced validation pipeline."""
                 try:
-                    log_msg = f"--- Processing Record {index + 1}/{total_records}: {provider_info.get('full_name', 'PDF Record')} ---"
+                    provider_name = provider_info.get('full_name') or provider_info.get('fullName', f'Record {index + 1}')
+                    log_msg = f"🔄 [{index + 1}/{total_records}] Processing: {provider_name}"
                     await result_queue.put(('log', log_msg))
                     
-                    # Run the blocking LangGraph agent in a thread pool
-                    initial_state = {"initial_data": provider_info, "log": []}
+                    # Normalize provider data
+                    normalized_data = normalize_provider_data(provider_info)
+                    
+                    # Build initial state matching AgentState structure
+                    initial_state = {
+                        "initial_data": normalized_data,
+                        "log": [],
+                        "npi_result": {},
+                        "oig_leie_result": {},
+                        "state_board_result": {},
+                        "address_result": {},
+                        "web_enrichment_data": {},
+                        "digital_footprint_score": 0.0,
+                        "qa_flags": [],
+                        "qa_corrections": {},
+                        "fraud_indicators": [],
+                        "conflicting_data": [],
+                        "golden_record": {},
+                        "confidence_score": 0.0,
+                        "confidence_breakdown": {},
+                        "requires_human_review": False,
+                        "review_reason": "",
+                        "final_profile": {},
+                        "execution_metadata": {},
+                        "data_provenance": {},
+                        "quality_metrics": {}
+                    }
+                    
+                    # Run the enhanced LangGraph agent in thread pool
                     final_result = await asyncio.to_thread(validation_agent_app.invoke, initial_state)
                     
-                    result_payload = {
-                        "original_data": provider_info,
-                        "final_profile": final_result.get("final_profile"),
-                        "confidence_score": final_result.get("confidence_score"),
-                        "qa_flags": final_result.get("qa_flags", []),
-                        "priority_score": final_result.get("priority_score", 0),
-                        "quality_metrics": final_result.get("quality_metrics", {}),
-                        "execution_metadata": final_result.get("execution_metadata", {})
-                    }
+                    # Format result for frontend
+                    result_payload = format_result_for_frontend(final_result, provider_info)
+                    
+                    # Add path emoji for visual feedback
+                    path = result_payload.get("path", "UNKNOWN")
+                    path_emoji = "🟢" if path == "GREEN" else "🟡" if path == "YELLOW" else "🔴"
+                    confidence = result_payload.get("confidence_score", 0)
+                    
+                    completion_msg = f"{path_emoji} [{index + 1}/{total_records}] {provider_name} - {path} PATH ({confidence:.1%} confidence)"
+                    await result_queue.put(('log', completion_msg))
+                    
+                    # Send result
                     await result_queue.put(('result', result_payload))
                     
                 except Exception as e:
-                    error_msg = f"Error processing record {index + 1}: {type(e).__name__}: {str(e)}"
+                    error_msg = f"❌ Error processing record {index + 1} ({provider_info.get('full_name', 'Unknown')}): {type(e).__name__}: {str(e)}"
                     print(error_msg)
                     await result_queue.put(('log', error_msg))
+                    
+                    # Send error result
+                    await result_queue.put(('result', {
+                        "original_data": provider_info,
+                        "error": str(e),
+                        "confidence_score": 0,
+                        "path": "ERROR",
+                        "requires_human_review": True,
+                        "review_reason": f"Processing error: {str(e)}"
+                    }))
 
-            # Create all worker tasks with concurrency limit
+            # Create semaphore for concurrency control
             semaphore = asyncio.Semaphore(MAX_CONCURRENT_WORKERS)
             
             async def bounded_worker(provider_info, index):
@@ -118,7 +222,7 @@ async def validate_file(file: UploadFile = File(...)):
                     # Wait for next result with timeout
                     result_type, result_data = await asyncio.wait_for(
                         result_queue.get(), 
-                        timeout=1.0
+                        timeout=2.0
                     )
                     
                     if result_type == 'log':
@@ -146,14 +250,73 @@ async def validate_file(file: UploadFile = File(...)):
                         yield f"data: {json.dumps({'type': 'result', 'data': result_data})}\n\n"
                 except:
                     break
+            
+            # Final summary
+            yield f"data: {json.dumps({'type': 'log', 'content': f'✅ Processing complete! {total_records} records validated.'})}\n\n"
 
         except Exception as e:
-            error_msg = f"Error during top-level processing: {type(e).__name__}: {str(e)}"
+            error_msg = f"❌ Critical error during processing: {type(e).__name__}: {str(e)}"
             print(error_msg)
             yield f"data: {json.dumps({'type': 'log', 'content': error_msg})}\n\n"
         finally:
             if os.path.exists(temp_filename):
                 os.remove(temp_filename)
-            yield f"data: {json.dumps({'type': 'close', 'content': 'Processing complete.'})}\n\n"
+            yield f"data: {json.dumps({'type': 'close', 'content': 'Stream closed.'})}\n\n"
 
     return StreamingResponse(file_processor_stream(), media_type="text/event-stream")
+
+
+@app.post("/validate-single")
+async def validate_single_provider(provider_data: Dict[str, Any]):
+    """
+    Validate a single provider (useful for testing or manual entry).
+    """
+    try:
+        normalized_data = normalize_provider_data(provider_data)
+        
+        initial_state = {
+            "initial_data": normalized_data,
+            "log": [],
+            "npi_result": {},
+            "oig_leie_result": {},
+            "state_board_result": {},
+            "address_result": {},
+            "web_enrichment_data": {},
+            "digital_footprint_score": 0.0,
+            "qa_flags": [],
+            "qa_corrections": {},
+            "fraud_indicators": [],
+            "conflicting_data": [],
+            "golden_record": {},
+            "confidence_score": 0.0,
+            "confidence_breakdown": {},
+            "requires_human_review": False,
+            "review_reason": "",
+            "final_profile": {},
+            "execution_metadata": {},
+            "data_provenance": {},
+            "quality_metrics": {}
+        }
+        
+        final_result = validation_agent_app.invoke(initial_state)
+        result_payload = format_result_for_frontend(final_result, provider_data)
+        
+        return {"status": "success", "data": result_payload}
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "data": {
+                "original_data": provider_data,
+                "confidence_score": 0,
+                "path": "ERROR",
+                "requires_human_review": True,
+                "review_reason": f"Processing error: {str(e)}"
+            }
+        }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
