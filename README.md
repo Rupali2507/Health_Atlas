@@ -260,8 +260,8 @@ pip install -r requirements.txt
 cat > .env << EOF
 GROQ_API_KEY=your_groq_api_key_here
 GEOAPIFY_API_KEY=your_geoapify_api_key_here
-GOOGLE_MAPS_API_KEY=your_google_maps_key_here  # Optional
-SERPER_API_KEY=your_serper_api_key_here        # Optional
+GOOGLE_MAPS_API_KEY=your_google_maps_key_here  
+SERPER_API_KEY=your_serper_api_key_here        
 MAX_WORKERS=5
 EOF
 
@@ -447,29 +447,6 @@ Kubernetes deployment • Multi-region redundancy • 99.9% SLA
 
 ---
 
-## 🤝 Contributing
-
-**Priority areas**:
-
-1. **State Board Scrapers** — Build Selenium scrapers for remaining 45 states
-2. **VLM Integration** — Implement Gemini/GPT-4 Vision for scanned documents
-3. **Analytics Dashboard** — Build advanced reporting with charts/filters
-4. **Test Coverage** — Expand unit tests to 80%+ coverage
-
-**Workflow**:
-```bash
-# Fork repo → Create feature branch
-git checkout -b feature/california-scraper
-
-# Make changes, add tests
-pytest tests/
-
-# Submit PR with description
-git push origin feature/california-scraper
-```
-
----
-
 ## 📜 License
 
 MIT License — see [LICENSE](LICENSE) for full details
@@ -508,15 +485,6 @@ Health Atlas isn't just a validation tool — it's the foundation for **self-hea
 
 </div>
 
-## Final KPI Summary
 
-The system successfully processed all valid records and produced the following final summary:
-## Analysis of Results vs. Goals
-- KPI	Goal	Result	Status
-- **Validation Accuracy**	80%+	88.89%	✅ GOAL ACHIEVED
-- **Processing Speed**	< 300 sec	~732 sec	PARTIALLY ACHIEVED*
-- **Processing Throughput**	500+/hr	517 providers/hr	✅ GOAL ACHIEVED
-
-Note on Processing Speed: The 5-minute target was missed as a deliberate engineering trade-off for the demo. To guarantee a stable run without hitting API rate limits on the free tier, the number of parallel workers was set to 1. The throughput of 517 providers/hour proves the architecture is highly efficient and would easily beat the speed target with a production-level API key.
 
 
