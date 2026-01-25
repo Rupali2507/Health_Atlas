@@ -203,20 +203,34 @@ def check_oig_leie_csv_method(npi: str = None, first_name: str = None, last_name
 # 2. STATE MEDICAL BOARD LICENSE VERIFICATION
 # ============================================
 
-def verify_state_license_universal(
-    state_code: str,
-    license_number: str,
-    provider_name: str
-) -> dict:
+def verify_state_license_universal(state_code: str, license_number: str, 
+                                   provider_name: str) -> dict:
     """
     Universal state license checker with automated state-specific scrapers.
+    
+    Args:
+        state_code: Two-letter state code (e.g., 'CA', 'TX', 'FL')
+        license_number: Provider's license number
+        provider_name: Full name of the provider (last name will be extracted)
+        
+    Returns:
+        Dictionary containing verification results:
+        - verified: bool - Whether license was successfully verified
+        - state: str - State code
+        - license_number: str - License number checked
+        - provider_name: str - Name found on license (if verified)
+        - status: str - License status (Active, Expired, etc.)
+        - expiration_date: str - License expiration date
+        - name_match: bool - Whether provider name matches
+        - has_disciplinary_actions: bool - Whether there are disciplinary actions
+        - source: str - Verification source
+        - verification_date: str - When verification was performed
+        - active: bool - Whether license is currently active
+        - error: str - Error message (if verification failed)
     """
-
-    # Normalize state code
-    state_code = state_code.upper()
-
+    
     print(f"\n🔍 Verifying {state_code} license: {license_number}")
-
+    
     # Check if state is supported
     if not is_state_supported(state_code):
         print(f"  ⚠️ No automated scraper for state: {state_code}")
@@ -229,49 +243,36 @@ def verify_state_license_universal(
             "note": f"State {state_code} requires manual verification",
             "supported_states": SUPPORTED_STATES
         }
-
+    
     # Get the appropriate scraper
     scraper_func = get_scraper(state_code)
-    if not scraper_func:
-        return {
-            "verified": False,
-            "state": state_code,
-            "license_number": license_number,
-            "error": "State supported but scraper not found"
-        }
-
+    
     # Extract last name from provider name
     last_name = provider_name.split()[-1] if provider_name else ""
-
+    
     try:
         # Run the state-specific scraper
         result = scraper_func(license_number, last_name)
-
-        if not isinstance(result, dict):
-            raise ValueError("Scraper did not return a dictionary")
-
-        # Logging summary (non-breaking, just prints)
+        
+        # Add provider verification summary
         if result.get("verified"):
             if result.get("active"):
                 print(f"  ✅ License ACTIVE - {result.get('provider_name')}")
             else:
                 print(f"  ⚠️ License status: {result.get('status')}")
-
+            
             if result.get("name_match"):
                 print(f"  ✅ Name matches: {last_name}")
             else:
-                print(
-                    f"  ⚠️ Name mismatch - Expected: {last_name}, "
-                    f"Found: {result.get('provider_name')}"
-                )
-
+                print(f"  ⚠️ Name mismatch - Expected: {last_name}, Found: {result.get('provider_name')}")
+            
             if result.get("has_disciplinary_actions"):
-                print("  ⚠️ Disciplinary actions found")
+                print(f"  ⚠️ Disciplinary actions found")
         else:
             print(f"  ❌ Verification failed: {result.get('error')}")
-
+        
         return result
-
+        
     except Exception as e:
         print(f"  ❌ Error during verification: {str(e)}")
         return {

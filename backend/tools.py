@@ -24,23 +24,71 @@ requests.packages.urllib3.util.connection.allowed_gai_family = allowed_gai_famil
 
 
 # --- TOOL 1: NPI REGISTRY SEARCH ---
-def search_npi_registry(first_name: str = "", last_name: str = "", npi_number: str = "", state: str = "") -> dict:
-    """Searches the NPPES NPI Registry for a provider."""
-    print(f"\nTOOL: Searching NPI Registry for NPI: {npi_number}, Name: {first_name} {last_name}")
+def search_npi_registry(
+    first_name: str = "",
+    last_name: str = "",
+    npi_number: str = "",
+    state: str = ""
+) -> dict:
+    """
+    Searches the NPPES NPI Registry.
+    RULE:
+    - If NPI is present → query ONLY by NPI (most reliable)
+    - Else → fallback to name + state search
+    """
+
+    print(
+        f"\nTOOL: NPPES lookup | "
+        f"NPI={npi_number} | Name={first_name} {last_name} | State={state}"
+    )
+
     base_url = "https://npiregistry.cms.hhs.gov/api/"
-    params = {k: v for k, v in {"version": "2.1", "first_name": first_name.strip(), "last_name": last_name.strip(), "number": npi_number.strip(), "state": state.strip()}.items() if v}
+
+    # 🔒 CRITICAL RULE
+    if npi_number and npi_number.strip():
+        params = {
+            "number": npi_number.strip(),
+            "version": "2.1"
+        }
+    else:
+        params = {
+            "first_name": first_name.strip(),
+            "last_name": last_name.strip(),
+            "state": state.strip(),
+            "version": "2.1"
+        }
+
     try:
         response = requests.get(base_url, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
-        if data.get("result_count", 0) > 0:
-            print("TOOL: Found match in NPI Registry.")
-            return data['results'][0]
-        else:
-            print("TOOL: No match found in NPI Registry.")
-            return {"error": "No results found."}
+
+        results = data.get("results", [])
+
+        if not results:
+            print("TOOL: NPPES → NO RESULTS")
+            return {
+                "match_confidence": 0.0,
+                "result_count": 0,
+                "results": []
+            }
+
+        print(f"TOOL: NPPES → {len(results)} result(s) found")
+
+        return {
+            "match_confidence": 1.0 if len(results) == 1 else 0.7,
+            "result_count": len(results),
+            "results": results
+        }
+
     except requests.exceptions.RequestException as e:
-        return {"error": f"API request failed: {e}"}
+        print(f"TOOL: NPPES API ERROR → {e}")
+        return {
+            "match_confidence": 0.0,
+            "result_count": 0,
+            "error": str(e)
+        }
+
     
 def parse_provider_pdf(pdf_path: str) -> list[dict]:
     """
@@ -234,3 +282,11 @@ if __name__ == '__main__':
         address="1600 Amphitheatre Parkway", city="Mountain View", state="CA", zip_code="94043"
     )
     print(json.dumps(validation_result_good, indent=2))
+
+if __name__ == "__main__":
+    print(
+        json.dumps(
+            search_npi_registry(npi_number="1538155312"),
+            indent=2
+        )
+    )

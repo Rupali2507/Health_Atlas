@@ -658,11 +658,10 @@ def quality_assurance_node(state: AgentState) -> dict:
     # CHECK 3: GEO-VERIFICATION
     print("\n  [3/7] Geo-Verification (Fraud Detection)...")
     if not state.get("address_result", {}).get("is_medical_facility", True):
-        flag = "⚠ FRAUD INDICATOR: Address is not a medical facility"
+        flag = "ℹ Address type: shared / non-hospital practice location"
         flags.append(flag)
-        flag_severity["WARNING"].append(flag)
-        fraud_indicators.append("NON_MEDICAL_ADDRESS")
-        print(f"    ⚠ {flag}")
+        flag_severity["INFO"].append(flag)
+        print(f"    ℹ {flag}")
     else:
         print("    ✓ Address verified as medical facility")
 
@@ -702,12 +701,31 @@ def quality_assurance_node(state: AgentState) -> dict:
     footprint_score = state.get("digital_footprint_score", 0)
     
     if footprint_score < 0.3:
-        flag = "⚠ ZOMBIE CANDIDATE: Weak digital footprint - may be inactive"
+        flag = "ℹ Limited digital footprint (individual clinician)"
         flags.append(flag)
-        flag_severity["WARNING"].append(flag)
-        print(f"    ⚠ {flag}")
+        flag_severity["INFO"].append(flag)
+        print(f"    ℹ {flag}")
+
     else:
         print(f"    ✓ Active digital presence (score: {footprint_score:.2%})")
+
+    # CHECK 6.5: DATA FRESHNESS (NON-BLOCKING)
+    print("\n  [6.5/7] NPPES Data Freshness...")
+
+    freshness_score = (
+        state.get("execution_metadata", {})
+            .get("nppes", {})
+            .get("freshness_score", 1.0)
+    )
+
+    if freshness_score < 0.3:
+        flag = "ℹ Data not recently updated in NPPES (monitoring recommended)"
+        flags.append(flag)
+        flag_severity["INFO"].append(flag)
+        print(f"    ℹ {flag}")
+    else:
+        print(f"    ✓ NPPES data reasonably fresh ({freshness_score:.2%})")
+
 
     # CHECK 7: ADDRESS AUTO-HEALING
     print("\n  [7/7] Address Auto-Healing...")
@@ -887,10 +905,14 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
         psv_score += 0.35
     
     license_status = state.get("state_board_result", {}).get("status")
+
     if license_status == "Active":
         psv_score += 0.30
+    elif license_status == "Skipped - Incomplete data":
+        psv_score += 0.15   # ← neutral partial credit
     elif license_status in ["Suspended", "Revoked"]:
         psv_score = 0.0
+
     
     if not state.get("oig_leie_result", {}).get("is_excluded", False):
         psv_score += 0.20
@@ -934,7 +956,13 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
     last_updated = state["initial_data"].get("last_updated", "2024-01-01")
     freshness_score = calculate_data_freshness(last_updated)
     
-    total_score += freshness_score * WEIGHTS["freshness"]
+    freshness_component = freshness_score * WEIGHTS["freshness"]
+
+    # Cap freshness penalty — cannot force RED alone
+    min_freshness_contribution = 0.05
+    freshness_component = max(freshness_component, min_freshness_contribution)
+
+    total_score += freshness_component
     print(f"  [5] Freshness: {freshness_score:.2f} × {WEIGHTS['freshness']:.2f}")
 
     # DIMENSION 6: Fraud Risk
@@ -955,7 +983,7 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
         tier_desc = "Auto-approved - Commit to database"
         tier_emoji = "🟢"
         path = "GREEN"
-    elif final_score >= 0.70:
+    elif final_score >= 0.65:
         tier = "GOLD"
         tier_desc = "Auto-approved with monitoring"
         tier_emoji = "🟡"
@@ -965,6 +993,7 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
         tier_desc = "REQUIRES HUMAN REVIEW"
         tier_emoji = "🔴"
         path = "RED"
+
         requires_human_review = True
         
         if psv_score < 0.5:
