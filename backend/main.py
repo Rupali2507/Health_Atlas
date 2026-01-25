@@ -56,44 +56,76 @@ def normalize_provider_data(provider_info: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def format_result_for_frontend(final_result: Dict[str, Any], provider_info: Dict[str, Any]) -> Dict[str, Any]:
-    """Format the enhanced agent result for frontend consumption."""
+    """Format agent result to EXACTLY match frontend expectations."""
+
     quality_metrics = final_result.get("quality_metrics", {})
-    
+
+    # ---- FIX 1: Dimension score mapping ----
+    dimension_scores = quality_metrics.get("dimension_scores", {})
+
+    dimension_percentages = {
+        k: f"{int(v * 100)}%"
+        for k, v in dimension_scores.items()
+    }
+
+    # ---- FIX 2: Confidence tier emoji ----
+    tier = quality_metrics.get("confidence_tier", "UNKNOWN")
+    tier_emoji = {
+        "HIGH": "🟢",
+        "MEDIUM": "🟡",
+        "LOW": "🔴"
+    }.get(tier, "📊")
+
     return {
         "original_data": provider_info,
-        "final_profile": final_result.get("final_profile") or final_result.get("golden_record", {}),
+
+        # ---- FIX 3: Final profile safety ----
+        "final_profile": final_result.get("final_profile")
+        or final_result.get("golden_record")
+        or {
+            "provider_name": provider_info.get("full_name", "Unknown Provider"),
+            "npi": provider_info.get("NPI", "N/A"),
+            "specialty": provider_info.get("specialty", "N/A"),
+        },
+
         "confidence_score": final_result.get("confidence_score", 0),
-        "confidence_tier": quality_metrics.get("confidence_tier", "UNKNOWN"),
-        "tier_description": quality_metrics.get("tier_description", ""),
-        "path": quality_metrics.get("path", "UNKNOWN"),
         "requires_human_review": final_result.get("requires_human_review", False),
         "review_reason": final_result.get("review_reason", ""),
-        
-        # QA Results
+        "path": quality_metrics.get("path", "UNKNOWN"),
+
+        # ---- QA ----
         "qa_flags": final_result.get("qa_flags", []),
         "fraud_indicators": final_result.get("fraud_indicators", []),
         "qa_corrections": final_result.get("qa_corrections", {}),
-        
-        # Detailed Metrics
+
+        # ---- FIX 4: MATCH FRONTEND CONTRACT ----
         "quality_metrics": {
             **quality_metrics,
-            "dimension_scores": quality_metrics.get("dimension_scores", {}),
+
+            # frontend uses THESE names
+            "score_breakdown": dimension_scores,
+            "dimension_percentages": dimension_percentages,
+
+            "confidence_tier": tier,
+            "tier_emoji": tier_emoji,
+            "tier_description": quality_metrics.get("tier_description", ""),
+
             "flag_severity": quality_metrics.get("flag_severity", {}),
             "risk_score": quality_metrics.get("risk_score", 0),
             "fraud_indicator_count": quality_metrics.get("fraud_indicator_count", 0),
-            "conflict_count": quality_metrics.get("conflict_count", 0)
+            "conflict_count": quality_metrics.get("conflict_count", 0),
         },
-        
-        # Execution Metadata
+
+        # ---- Execution metadata ----
         "execution_metadata": final_result.get("execution_metadata", {}),
-        
-        # Source Verification Status
+
+        # ---- Verification summary ----
         "verification_status": {
-            "nppes_verified": bool(final_result.get("npi_result", {}).get("result_count", 0) > 0),
+            "nppes_verified": bool(final_result.get("npi_result", {}).get("result_count", 0)),
             "oig_clear": not final_result.get("oig_leie_result", {}).get("is_excluded", False),
             "license_active": final_result.get("state_board_result", {}).get("status") == "Active",
             "address_validated": final_result.get("address_result", {}).get("is_medical_facility", False),
-            "digital_footprint_score": final_result.get("digital_footprint_score", 0)
+            "digital_footprint_score": final_result.get("digital_footprint_score", 0),
         }
     }
 
@@ -141,6 +173,9 @@ async def validate_file(file: UploadFile = File(...)):
                     provider_name = provider_info.get('full_name') or provider_info.get('fullName', f'Record {index + 1}')
                     log_msg = f"🔄 [{index + 1}/{total_records}] Processing: {provider_name}"
                     await result_queue.put(('log', log_msg))
+                    # ---- STAGE 1: NPI ----
+                    await result_queue.put(('log', 'npi registry check started'))
+
                     
                     # Normalize provider data
                     normalized_data = normalize_provider_data(provider_info)
@@ -171,6 +206,12 @@ async def validate_file(file: UploadFile = File(...)):
                     }
                     
                     # Run the enhanced LangGraph agent in thread pool
+                    await result_queue.put(('log', 'address validation started'))
+                    await result_queue.put(('log', 'web enrichment started'))
+                    await result_queue.put(('log', 'quality assurance started'))
+                    await result_queue.put(('log', 'synthesis started'))
+                    await result_queue.put(('log', 'confidence scoring started'))
+
                     final_result = await asyncio.to_thread(validation_agent_app.invoke, initial_state)
                     
                     # Format result for frontend

@@ -3,7 +3,7 @@ Production-Ready Tools for Healthcare Provider Verification
 ============================================================
 
 Installation Requirements:
-pip install requests beautifulsoup4 selenium googlemaps serper-python python-dotenv
+pip install requests beautifulsoup4 selenium googlemaps serper-python python-dotenv pandas
 
 Environment Variables (.env file):
 SERPER_API_KEY=your_serper_key_here
@@ -23,6 +23,9 @@ import time
 import re
 from typing import Dict, Optional, List
 from datetime import datetime
+
+# Import state scrapers
+from state_scrapers import get_scraper, is_state_supported, SUPPORTED_STATES
 
 # ============================================
 # 1. OIG LEIE EXCLUSION CHECK
@@ -200,117 +203,128 @@ def check_oig_leie_csv_method(npi: str = None, first_name: str = None, last_name
 # 2. STATE MEDICAL BOARD LICENSE VERIFICATION
 # ============================================
 
-def verify_california_medical_board(license_number: str, last_name: str) -> dict:
-    """
-    Example: California Medical Board Verification
-    Website: https://search.dca.ca.gov/
-    
-    Each state has different formats - this is a template.
-    """
-    print(f"  🏛️ Checking California Medical Board: {license_number}")
-    
-    try:
-        # Setup headless Chrome
-        chrome_options = Options()
-        chrome_options.add_argument('--headless')
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        
-        driver = webdriver.Chrome(options=chrome_options)
-        
-        # Navigate to search page
-        driver.get("https://search.dca.ca.gov/")
-        
-        # Wait for page load
-        wait = WebDriverWait(driver, 10)
-        
-        # Select "Medical Board of California"
-        board_select = wait.until(
-            EC.presence_of_element_located((By.ID, "boardCode"))
-        )
-        board_select.send_keys("Medical Board of California")
-        
-        # Enter license number
-        license_input = driver.find_element(By.ID, "licenseNumber")
-        license_input.send_keys(license_number)
-        
-        # Click search
-        search_button = driver.find_element(By.ID, "searchButton")
-        search_button.click()
-        
-        # Wait for results
-        time.sleep(3)
-        
-        # Parse results
-        result_div = driver.find_element(By.CLASS_NAME, "license-details")
-        
-        # Extract status
-        status_element = result_div.find_element(By.XPATH, "//dt[text()='Status']/following-sibling::dd[1]")
-        status = status_element.text.strip()
-        
-        # Extract expiration
-        exp_element = result_div.find_element(By.XPATH, "//dt[text()='Expiration Date']/following-sibling::dd[1]")
-        expiration = exp_element.text.strip()
-        
-        # Check for disciplinary actions
-        disciplinary_actions = []
-        try:
-            discipline_section = driver.find_element(By.CLASS_NAME, "disciplinary-actions")
-            actions = discipline_section.find_elements(By.TAG_NAME, "li")
-            disciplinary_actions = [action.text for action in actions]
-        except:
-            pass  # No disciplinary actions
-        
-        driver.quit()
-        
-        print(f"  ✅ License Status: {status} (Expires: {expiration})")
-        
-        return {
-            "status": status,
-            "license_number": license_number,
-            "expiration_date": expiration,
-            "disciplinary_actions": disciplinary_actions,
-            "check_date": datetime.now().isoformat(),
-            "source": "California Medical Board"
-        }
-        
-    except Exception as e:
-        print(f"  ⚠️ CA Medical Board check failed: {e}")
-        if 'driver' in locals():
-            driver.quit()
-        return {"status": "Unknown", "error": str(e)}
-
-
 def verify_state_license_universal(state_code: str, license_number: str, 
                                    provider_name: str) -> dict:
     """
-    Universal state license checker (requires state-specific configuration)
+    Universal state license checker with automated state-specific scrapers.
     
-    For production, you'll need to implement each state's specific scraper.
-    States without online lookup will require manual verification.
+    Args:
+        state_code: Two-letter state code (e.g., 'CA', 'TX', 'FL')
+        license_number: Provider's license number
+        provider_name: Full name of the provider (last name will be extracted)
+        
+    Returns:
+        Dictionary containing verification results:
+        - verified: bool - Whether license was successfully verified
+        - state: str - State code
+        - license_number: str - License number checked
+        - provider_name: str - Name found on license (if verified)
+        - status: str - License status (Active, Expired, etc.)
+        - expiration_date: str - License expiration date
+        - name_match: bool - Whether provider name matches
+        - has_disciplinary_actions: bool - Whether there are disciplinary actions
+        - source: str - Verification source
+        - verification_date: str - When verification was performed
+        - active: bool - Whether license is currently active
+        - error: str - Error message (if verification failed)
     """
     
-    # State-specific scrapers
-    state_scrapers = {
-        "CA": verify_california_medical_board,
-        # Add more states:
-        # "NY": verify_new_york_medical_board,
-        # "TX": verify_texas_medical_board,
-        # etc.
-    }
+    print(f"\n🔍 Verifying {state_code} license: {license_number}")
     
-    scraper_func = state_scrapers.get(state_code)
-    
-    if scraper_func:
-        return scraper_func(license_number, provider_name.split()[-1])
-    else:
+    # Check if state is supported
+    if not is_state_supported(state_code):
         print(f"  ⚠️ No automated scraper for state: {state_code}")
+        print(f"  📋 Supported states: {', '.join(SUPPORTED_STATES)}")
         return {
-            "status": "Manual Verification Required",
+            "verified": False,
             "state": state_code,
             "license_number": license_number,
-            "note": f"State {state_code} requires manual verification"
+            "status": "Manual Verification Required",
+            "note": f"State {state_code} requires manual verification",
+            "supported_states": SUPPORTED_STATES
         }
+    
+    # Get the appropriate scraper
+    scraper_func = get_scraper(state_code)
+    
+    # Extract last name from provider name
+    last_name = provider_name.split()[-1] if provider_name else ""
+    
+    try:
+        # Run the state-specific scraper
+        result = scraper_func(license_number, last_name)
+        
+        # Add provider verification summary
+        if result.get("verified"):
+            if result.get("active"):
+                print(f"  ✅ License ACTIVE - {result.get('provider_name')}")
+            else:
+                print(f"  ⚠️ License status: {result.get('status')}")
+            
+            if result.get("name_match"):
+                print(f"  ✅ Name matches: {last_name}")
+            else:
+                print(f"  ⚠️ Name mismatch - Expected: {last_name}, Found: {result.get('provider_name')}")
+            
+            if result.get("has_disciplinary_actions"):
+                print(f"  ⚠️ Disciplinary actions found")
+        else:
+            print(f"  ❌ Verification failed: {result.get('error')}")
+        
+        return result
+        
+    except Exception as e:
+        print(f"  ❌ Error during verification: {str(e)}")
+        return {
+            "verified": False,
+            "state": state_code,
+            "license_number": license_number,
+            "error": f"Unexpected error: {str(e)}",
+            "source": f"{state_code} Medical Board"
+        }
+
+
+def batch_verify_licenses(license_data: list) -> list:
+    """
+    Verify multiple licenses in batch.
+    
+    Args:
+        license_data: List of dicts with keys: state_code, license_number, provider_name
+        
+    Returns:
+        List of verification results
+    """
+    results = []
+    
+    print(f"\n{'='*60}")
+    print(f"📋 BATCH LICENSE VERIFICATION")
+    print(f"{'='*60}")
+    print(f"Total licenses to verify: {len(license_data)}")
+    
+    for idx, license_info in enumerate(license_data, 1):
+        print(f"\n[{idx}/{len(license_data)}] Processing...")
+        
+        result = verify_state_license_universal(
+            state_code=license_info.get('state_code'),
+            license_number=license_info.get('license_number'),
+            provider_name=license_info.get('provider_name')
+        )
+        
+        results.append(result)
+    
+    # Summary
+    verified_count = sum(1 for r in results if r.get('verified'))
+    active_count = sum(1 for r in results if r.get('active'))
+    
+    print(f"\n{'='*60}")
+    print(f"📊 VERIFICATION SUMMARY")
+    print(f"{'='*60}")
+    print(f"Total processed: {len(results)}")
+    print(f"Successfully verified: {verified_count}")
+    print(f"Active licenses: {active_count}")
+    print(f"Failed/Manual: {len(results) - verified_count}")
+    
+    return results
 
 
 # ============================================
@@ -556,6 +570,126 @@ def search_provider_web_presence(provider_name: str, npi: str, phone: str = None
 
 
 # ============================================
+# COMPREHENSIVE PROVIDER VERIFICATION
+# ============================================
+
+def comprehensive_provider_verification(provider_data: dict) -> dict:
+    """
+    Run all verification checks on a provider
+    
+    Args:
+        provider_data: {
+            'npi': str,
+            'first_name': str,
+            'last_name': str,
+            'state_code': str,
+            'license_number': str,
+            'address': str,
+            'city': str,
+            'state': str,
+            'zip_code': str,
+            'phone': str (optional)
+        }
+    
+    Returns:
+        Comprehensive verification report
+    """
+    print(f"\n{'='*60}")
+    print(f"🏥 COMPREHENSIVE PROVIDER VERIFICATION")
+    print(f"{'='*60}")
+    print(f"Provider: {provider_data.get('first_name')} {provider_data.get('last_name')}")
+    print(f"NPI: {provider_data.get('npi')}")
+    print(f"{'='*60}\n")
+    
+    report = {
+        "provider_info": provider_data,
+        "verification_date": datetime.now().isoformat(),
+        "checks": {}
+    }
+    
+    # 1. OIG Exclusion Check
+    print("1️⃣ Running OIG Exclusion Check...")
+    report['checks']['oig_exclusion'] = check_oig_leie_csv_method(
+        npi=provider_data.get('npi'),
+        first_name=provider_data.get('first_name'),
+        last_name=provider_data.get('last_name')
+    )
+    
+    # 2. State License Verification
+    print("\n2️⃣ Running State License Verification...")
+    report['checks']['state_license'] = verify_state_license_universal(
+        state_code=provider_data.get('state_code'),
+        license_number=provider_data.get('license_number'),
+        provider_name=f"{provider_data.get('first_name')} {provider_data.get('last_name')}"
+    )
+    
+    # 3. Geo-Verification
+    print("\n3️⃣ Running Geo-Verification...")
+    report['checks']['geo_verification'] = verify_medical_facility(
+        address=provider_data.get('address'),
+        city=provider_data.get('city'),
+        state=provider_data.get('state'),
+        zip_code=provider_data.get('zip_code')
+    )
+    
+    # 4. Web Presence Check
+    print("\n4️⃣ Running Web Presence Check...")
+    report['checks']['web_presence'] = search_provider_web_presence(
+        provider_name=f"{provider_data.get('first_name')} {provider_data.get('last_name')}",
+        npi=provider_data.get('npi'),
+        phone=provider_data.get('phone')
+    )
+    
+    # 5. Google Scholar Search
+    print("\n5️⃣ Running Google Scholar Search...")
+    report['checks']['publications'] = search_google_scholar(
+        provider_name=f"{provider_data.get('first_name')} {provider_data.get('last_name')}",
+        year_min=2020
+    )
+    
+    # Calculate overall verification score
+    score = 0.0
+    max_score = 5.0
+    
+    # OIG (critical - must pass)
+    if not report['checks']['oig_exclusion'].get('is_excluded'):
+        score += 1.0
+    else:
+        score = 0  # Automatic failure
+    
+    # State License
+    if report['checks']['state_license'].get('verified') and report['checks']['state_license'].get('active'):
+        score += 1.5
+    
+    # Geo
+    if report['checks']['geo_verification'].get('is_medical_facility'):
+        score += 1.0
+    
+    # Web Presence
+    score += report['checks']['web_presence'].get('web_presence_score', 0) * 1.0
+    
+    # Publications (bonus)
+    if report['checks']['publications'].get('publication_count', 0) > 0:
+        score += 0.5
+    
+    report['verification_score'] = round(score / max_score * 100, 2)
+    report['verification_status'] = (
+        "VERIFIED" if score >= 3.5 else
+        "NEEDS REVIEW" if score >= 2.0 else
+        "FAILED"
+    )
+    
+    print(f"\n{'='*60}")
+    print(f"📊 VERIFICATION SUMMARY")
+    print(f"{'='*60}")
+    print(f"Overall Score: {report['verification_score']}%")
+    print(f"Status: {report['verification_status']}")
+    print(f"{'='*60}\n")
+    
+    return report
+
+
+# ============================================
 # USAGE EXAMPLES
 # ============================================
 
@@ -564,47 +698,25 @@ if __name__ == "__main__":
     print("PRODUCTION TOOLS - USAGE EXAMPLES")
     print("="*60)
     
-    # Example 1: OIG Check
-    print("\n1. OIG LEIE Exclusion Check:")
-    oig_result = check_oig_leie_exclusion(
-        npi="1234567890",
-        first_name="John",
-        last_name="Smith"
-    )
-    print(f"   Result: {oig_result}")
+    # Example: Comprehensive Verification
+    provider_data = {
+        'npi': '1234567890',
+        'first_name': 'John',
+        'last_name': 'Smith',
+        'state_code': 'CA',
+        'license_number': 'A12345',
+        'address': '1234 Medical Center Dr',
+        'city': 'Los Angeles',
+        'state': 'CA',
+        'zip_code': '90001',
+        'phone': '555-1234'
+    }
     
-    # Example 2: State License (California)
-    print("\n2. State License Verification:")
-    license_result = verify_state_license_universal(
-        state_code="CA",
-        license_number="A12345",
-        provider_name="Dr. Jane Doe"
-    )
-    print(f"   Result: {license_result}")
+    verification_report = comprehensive_provider_verification(provider_data)
     
-    # Example 3: Google Scholar
-    print("\n3. Google Scholar Search:")
-    scholar_result = search_google_scholar(
-        provider_name="Dr. Robert Johnson",
-        year_min=2024
-    )
-    print(f"   Publications found: {scholar_result.get('publication_count', 0)}")
+    # Save report
+    import json
+    with open('verification_report.json', 'w') as f:
+        json.dump(verification_report, f, indent=2)
     
-    # Example 4: Geo-Verification
-    print("\n4. Geo-Verification:")
-    geo_result = verify_medical_facility(
-        address="1234 Medical Center Dr",
-        city="Los Angeles",
-        state="CA",
-        zip_code="90001"
-    )
-    print(f"   Is medical facility: {geo_result.get('is_medical_facility')}")
-    
-    # Example 5: Web Presence
-    print("\n5. Web Presence Check:")
-    web_result = search_provider_web_presence(
-        provider_name="Dr. Sarah Williams",
-        npi="9876543210",
-        phone="555-1234"
-    )
-    print(f"   Web presence score: {web_result.get('web_presence_score', 0):.2f}")
+    print("✅ Verification report saved to verification_report.json")
