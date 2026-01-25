@@ -60,26 +60,39 @@ def format_result_for_frontend(final_result: Dict[str, Any], provider_info: Dict
 
     quality_metrics = final_result.get("quality_metrics", {})
 
-    # ---- FIX 1: Dimension score mapping ----
-    dimension_scores = quality_metrics.get("dimension_scores", {})
+    # ✅ FIX: Extract score_breakdown (0-1 values) and dimension_percentages (strings)
+    score_breakdown = quality_metrics.get("score_breakdown", {})
+    dimension_percentages = quality_metrics.get("dimension_percentages", {})
 
-    dimension_percentages = {
-        k: f"{int(v * 100)}%"
-        for k, v in dimension_scores.items()
-    }
+    # ✅ FALLBACK: If missing, create from scratch
+    if not score_breakdown:
+        score_breakdown = {
+            "identity": 0.0,
+            "address": 0.0,
+            "completeness": 0.0,
+            "freshness": 0.0,
+            "enrichment": 0.0,
+            "risk": 0.0
+        }
+    
+    if not dimension_percentages:
+        dimension_percentages = {
+            k: f"{int(v * 100)}%" for k, v in score_breakdown.items()
+        }
+        dimension_percentages["risk_penalty"] = dimension_percentages.pop("risk", "0%")
 
-    # ---- FIX 2: Confidence tier emoji ----
+    # ✅ FIX: Confidence tier emoji
     tier = quality_metrics.get("confidence_tier", "UNKNOWN")
     tier_emoji = {
-        "HIGH": "🟢",
-        "MEDIUM": "🟡",
-        "LOW": "🔴"
+        "PLATINUM": "🟢",
+        "GOLD": "🟡",
+        "QUESTIONABLE": "🔴"
     }.get(tier, "📊")
 
     return {
         "original_data": provider_info,
 
-        # ---- FIX 3: Final profile safety ----
+        # ✅ FIX: Final profile safety
         "final_profile": final_result.get("final_profile")
         or final_result.get("golden_record")
         or {
@@ -93,18 +106,18 @@ def format_result_for_frontend(final_result: Dict[str, Any], provider_info: Dict
         "review_reason": final_result.get("review_reason", ""),
         "path": quality_metrics.get("path", "UNKNOWN"),
 
-        # ---- QA ----
+        # QA
         "qa_flags": final_result.get("qa_flags", []),
         "fraud_indicators": final_result.get("fraud_indicators", []),
         "qa_corrections": final_result.get("qa_corrections", {}),
 
-        # ---- FIX 4: MATCH FRONTEND CONTRACT ----
+        # ✅ FIX: MATCH FRONTEND CONTRACT EXACTLY
         "quality_metrics": {
             **quality_metrics,
 
-            # frontend uses THESE names
-            "score_breakdown": dimension_scores,
-            "dimension_percentages": dimension_percentages,
+            # Frontend expects these exact keys
+            "score_breakdown": score_breakdown,  # ✅ 0-1 float values
+            "dimension_percentages": dimension_percentages,  # ✅ String percentages
 
             "confidence_tier": tier,
             "tier_emoji": tier_emoji,
@@ -116,10 +129,10 @@ def format_result_for_frontend(final_result: Dict[str, Any], provider_info: Dict
             "conflict_count": quality_metrics.get("conflict_count", 0),
         },
 
-        # ---- Execution metadata ----
+        # Execution metadata
         "execution_metadata": final_result.get("execution_metadata", {}),
 
-        # ---- Verification summary ----
+        # Verification summary
         "verification_status": {
             "nppes_verified": bool(final_result.get("npi_result", {}).get("result_count", 0)),
             "oig_clear": not final_result.get("oig_leie_result", {}).get("is_excluded", False),

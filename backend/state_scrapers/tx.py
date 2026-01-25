@@ -11,6 +11,9 @@ from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import time
 from datetime import datetime
+from config import USE_MOCK_STATE_SCRAPERS
+from state_scrapers.mock_response import mock_license_response
+
 
 
 def verify_texas_medical_board(license_number: str, last_name: str) -> dict:
@@ -18,7 +21,13 @@ def verify_texas_medical_board(license_number: str, last_name: str) -> dict:
     Texas Medical Board license verification
     URL: https://public.tmb.state.tx.us/
     """
-    
+    if USE_MOCK_STATE_SCRAPERS:
+        return mock_license_response(
+            state_code="TX",  
+            license_number=license_number,
+            provider_name=last_name
+        )
+
     chrome_options = Options()
     chrome_options.add_argument('--headless')
     chrome_options.add_argument('--no-sandbox')

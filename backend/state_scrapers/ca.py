@@ -11,6 +11,15 @@ from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import time
 from datetime import datetime
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.edge.service import Service
+from selenium.webdriver.edge.options import Options
+from webdriver_manager.microsoft import EdgeChromiumDriverManager
+
+from config import USE_MOCK_STATE_SCRAPERS
+from state_scrapers.mock_response import mock_license_response
+
+
 
 
 def verify_california_medical_board(license_number: str, last_name: str) -> dict:
@@ -18,22 +27,38 @@ def verify_california_medical_board(license_number: str, last_name: str) -> dict
     California Medical Board license verification
     URL: https://search.dca.ca.gov/
     """
+
+    if USE_MOCK_STATE_SCRAPERS:
+        return mock_license_response(
+            state_code="CA",  
+            license_number=license_number,
+            provider_name=last_name
+        )
+
+    # real selenium scraping starts below
+
     
-    chrome_options = Options()
-    chrome_options.add_argument('--headless')
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--disable-dev-shm-usage')
-    chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option('useAutomationExtension', False)
+    edge_options = Options()
+    #edge_options.add_argument("--headless=new")
+    edge_options.add_argument("--no-sandbox")
+    edge_options.add_argument("--disable-dev-shm-usage")
+    edge_options.add_argument("--disable-gpu")
+    edge_options.add_argument("--window-size=1920,1080")
+    edge_options.add_argument("--disable-blink-features=AutomationControlled")
+    edge_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    edge_options.add_experimental_option("useAutomationExtension", False)
+
     
-    driver = webdriver.Chrome(options=chrome_options)
+    service = Service(EdgeChromiumDriverManager().install())
+    driver = webdriver.Edge(service=service, options=edge_options)
+
     
     try:
         print(f"  🔍 Verifying CA license: {license_number}")
         
         # Navigate to CA Medical Board search
         driver.get("https://search.dca.ca.gov/")
+        
         wait = WebDriverWait(driver, 15)
         
         # Wait for page load

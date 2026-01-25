@@ -12,6 +12,10 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import time
 from datetime import datetime
 
+from config import USE_MOCK_STATE_SCRAPERS
+from state_scrapers.mock_response import mock_license_response
+
+
 
 def verify_georgia_medical_board(license_number: str, last_name: str) -> dict:
     """
@@ -19,6 +23,13 @@ def verify_georgia_medical_board(license_number: str, last_name: str) -> dict:
     URL: https://verify.sos.ga.gov/verification/
     """
     
+    if USE_MOCK_STATE_SCRAPERS:
+        return mock_license_response(
+            state_code="GA",  
+            license_number=license_number,
+            provider_name=last_name
+        )
+
     chrome_options = Options()
     chrome_options.add_argument('--headless')
     chrome_options.add_argument('--no-sandbox')
