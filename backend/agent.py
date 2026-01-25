@@ -852,7 +852,7 @@ def ai_arbitration_node(state: AgentState) -> dict:
     }
 
 # ============================================
-# STEP 6: CONFIDENCE SCORING WITH HITL
+# STEP 6: CONFIDENCE SCORING WITH HITL (FIXED)
 # ============================================
 @safe_node_execution
 def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
@@ -878,7 +878,7 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
     print("\n  Scoring Dimensions:")
     print("  ─────────────────────────────────────────")
 
-    # DIMENSION 1
+    # DIMENSION 1: Primary Source Verification
     psv_score = 0.0
     npi_meta = state.get("execution_metadata", {}).get("nppes", {})
     if npi_meta.get("match_confidence", 0) >= 0.95:
@@ -900,7 +900,7 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
     total_score += psv_score * WEIGHTS["primary_source_verification"]
     print(f"  [1] Primary Sources: {psv_score:.2f} × {WEIGHTS['primary_source_verification']:.2f}")
 
-    # DIMENSION 2
+    # DIMENSION 2: Address Reliability
     address_score = 0.0
     address_meta = state.get("execution_metadata", {}).get("address", {})
     
@@ -917,12 +917,12 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
     total_score += address_score * WEIGHTS["address_reliability"]
     print(f"  [2] Address: {address_score:.2f} × {WEIGHTS['address_reliability']:.2f}")
 
-    # DIMENSION 3
+    # DIMENSION 3: Digital Footprint
     footprint_score = state.get("digital_footprint_score", 0)
     total_score += footprint_score * WEIGHTS["digital_footprint"]
     print(f"  [3] Digital Footprint: {footprint_score:.2f} × {WEIGHTS['digital_footprint']:.2f}")
 
-    # DIMENSION 4
+    # DIMENSION 4: Data Completeness
     required_fields = ["provider_name", "npi", "specialty", "address", "phone"]
     present = sum(1 for f in required_fields if final_data.get(f))
     completeness_score = present / len(required_fields)
@@ -930,14 +930,14 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
     total_score += completeness_score * WEIGHTS["data_completeness"]
     print(f"  [4] Completeness: {completeness_score:.2f} × {WEIGHTS['data_completeness']:.2f}")
 
-    # DIMENSION 5
+    # DIMENSION 5: Freshness
     last_updated = state["initial_data"].get("last_updated", "2024-01-01")
     freshness_score = calculate_data_freshness(last_updated)
     
     total_score += freshness_score * WEIGHTS["freshness"]
     print(f"  [5] Freshness: {freshness_score:.2f} × {WEIGHTS['freshness']:.2f}")
 
-    # DIMENSION 6
+    # DIMENSION 6: Fraud Risk
     fraud_penalty = len(fraud_indicators) * 0.15
     fraud_penalty = min(fraud_penalty, 0.05)
     risk_score = max(0, WEIGHTS["fraud_risk"] - fraud_penalty)
@@ -979,7 +979,7 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
     print(f"\n  🔴 PATH: {path}")
     print(f"  CONFIDENCE: {final_score:.3f}")
 
-    # THE FIX - Add these two dictionaries
+    # ✅ FIX: Create score_breakdown with 0-1 values (not percentages)
     score_breakdown = {
         "identity": psv_score,
         "address": address_score,
@@ -989,6 +989,7 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
         "risk": risk_score
     }
     
+    # ✅ FIX: Create dimension_percentages separately
     dimension_percentages = {
         "identity": f"{int(psv_score * 100)}%",
         "address": f"{int(address_score * 100)}%",
@@ -1004,8 +1005,8 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
         "review_reason": review_reason,
         "quality_metrics": {
             **state.get("quality_metrics", {}),
-            "score_breakdown": score_breakdown,  # ← THE FIX
-            "dimension_percentages": dimension_percentages,  # ← THE FIX
+            "score_breakdown": score_breakdown,  # ✅ 0-1 values
+            "dimension_percentages": dimension_percentages,  # ✅ String percentages
             "confidence_tier": tier,
             "tier_description": tier_desc,
             "tier_emoji": tier_emoji,
@@ -1018,6 +1019,7 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
             "review_reason": review_reason
         }
     }
+
 # ============================================
 # HITL DECISION & ACTION NODES
 # ============================================
