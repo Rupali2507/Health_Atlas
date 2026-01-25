@@ -12,12 +12,22 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import time
 from datetime import datetime
 
+from config import USE_MOCK_STATE_SCRAPERS
+from state_scrapers.mock_response import mock_license_response
+
+
 
 def verify_new_york_medical_board(license_number: str, last_name: str) -> dict:
     """
     New York State Education Department license verification
     URL: http://www.nysed.gov/coms
     """
+    if USE_MOCK_STATE_SCRAPERS:
+        return mock_license_response(
+            state_code="NY",  
+            license_number=license_number,
+            provider_name=last_name
+        )
     
     chrome_options = Options()
     chrome_options.add_argument('--headless')
