@@ -35,7 +35,11 @@ const Provider = () => {
         address: formatAddress(
           result.final_profile?.address || result.original_data?.address
         ),
-        npi: result.final_profile?.NPI || result.original_data?.NPI || "N/A",
+        npi: result.final_profile?.NPI || 
+            result.final_profile?.npi || 
+            result.original_data?.NPI || 
+            result.original_data?.npi || 
+            "N/A",
         confidence: Math.round(score * 100),
         path: path,
         fraudCount: fraudCount,
