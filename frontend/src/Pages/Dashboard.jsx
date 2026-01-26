@@ -47,14 +47,12 @@ const Dashboard = () => {
       ? validationRuns[validationRuns.length - 1]
       : null;
 
-  // --- 🧠 AI PREDICTIVE MATH CALCULATIONS ---
-  // We bucket providers based on the 'data_health' score from Python
-  let highRiskCount = 0; // Reliability < 0.5 (Decaying fast)
-  let mediumRiskCount = 0; // Reliability < 0.8 (Stale)
-  let healthyCount = 0; // Reliability > 0.8 (Fresh)
+  // --- AI PREDICTIVE MATH CALCULATIONS ---
+  let highRiskCount = 0;
+  let mediumRiskCount = 0;
+  let healthyCount = 0;
 
   allResults.forEach((r) => {
-    // Default to 1.0 (Healthy) if logic hasn't run yet to avoid scary dashboard on empty state
     const reliability = r.final_profile?.data_health?.current_reliability ?? 1.0;
     
     if (reliability < 0.5) highRiskCount++;
@@ -101,68 +99,66 @@ const Dashboard = () => {
              </div>
           </div>
 
-          {/* --- NEW: PREDICTIVE MAINTENANCE SCHEDULE (The "Data Decay" Visual) --- */}
-          <div className={`mb-8 rounded-2xl p-1 overflow-hidden bg-gradient-to-r from-purple-600 to-blue-600 shadow-lg`}>
-            <div className={`${Dark ? "bg-gray-900" : "bg-white"} rounded-xl p-6`}>
+          {/* Data Health Overview */}
+          <div className={`mb-8 rounded-2xl border shadow-sm ${cardBg} p-6`}>
                 <div className="flex items-center justify-between mb-6">
                     <div>
-                        <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-blue-600 flex items-center gap-2">
-                            <Activity className="text-purple-600" size={20}/>
-                            Predictive Data Health Forecast
+                        <h2 className="text-xl font-bold flex items-center gap-2">
+                            <Activity size={22}/>
+                            Data Health Overview
                         </h2>
                         <p className={`text-sm ${textSecondary} mt-1`}>
-                            Based on Exponential Decay Model: <span className="font-mono text-xs opacity-70">R(t) = R₀e^(-λt)</span>
+                            Provider data quality status and recommended actions
                         </p>
                     </div>
-                    <button className="text-xs font-semibold bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg hover:bg-purple-200 transition-colors">
-                        Auto-Schedule Revalidation
-                    </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Urgent / High Risk */}
-                    <div className={`p-4 rounded-xl border-l-4 border-red-500 ${Dark ? "bg-gray-800" : "bg-gray-50"}`}>
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <p className="text-xs font-bold text-red-500 uppercase tracking-wider mb-1">Critical Decay</p>
-                                <p className="text-2xl font-bold">{highRiskCount}</p>
-                                <p className={`text-xs ${textSecondary} mt-1`}>Re-validate within 7 days</p>
+                    <div className={`p-5 rounded-xl border ${Dark ? "bg-red-500/5 border-red-500/20" : "bg-red-50 border-red-200"}`}>
+                        <div className="flex justify-between items-start mb-3">
+                            <div className={`p-2.5 rounded-lg ${Dark ? "bg-red-500/10" : "bg-red-100"}`}>
+                                <TrendingDown size={20} className="text-red-600" />
                             </div>
-                            <div className="p-2 bg-red-100 rounded-lg text-red-600">
-                                <TrendingDown size={18} />
-                            </div>
+                            <span className={`text-xs font-semibold px-2 py-1 rounded ${Dark ? "bg-red-500/20 text-red-400" : "bg-red-200 text-red-700"}`}>
+                                Urgent
+                            </span>
                         </div>
+                        <p className="text-3xl font-bold mb-1">{highRiskCount}</p>
+                        <p className="text-sm font-semibold text-red-600 mb-1">Critical Priority</p>
+                        <p className={`text-xs ${textSecondary}`}>Immediate revalidation required</p>
                     </div>
 
                     {/* Medium Risk */}
-                     <div className={`p-4 rounded-xl border-l-4 border-yellow-500 ${Dark ? "bg-gray-800" : "bg-gray-50"}`}>
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <p className="text-xs font-bold text-yellow-600 uppercase tracking-wider mb-1">Stale Data</p>
-                                <p className="text-2xl font-bold">{mediumRiskCount}</p>
-                                <p className={`text-xs ${textSecondary} mt-1`}>Re-validate within 30 days</p>
+                     <div className={`p-5 rounded-xl border ${Dark ? "bg-yellow-500/5 border-yellow-500/20" : "bg-yellow-50 border-yellow-200"}`}>
+                        <div className="flex justify-between items-start mb-3">
+                            <div className={`p-2.5 rounded-lg ${Dark ? "bg-yellow-500/10" : "bg-yellow-100"}`}>
+                                <Clock size={20} className="text-yellow-600" />
                             </div>
-                            <div className="p-2 bg-yellow-100 rounded-lg text-yellow-600">
-                                <Clock size={18} />
-                            </div>
+                            <span className={`text-xs font-semibold px-2 py-1 rounded ${Dark ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-200 text-yellow-700"}`}>
+                                Moderate
+                            </span>
                         </div>
+                        <p className="text-3xl font-bold mb-1">{mediumRiskCount}</p>
+                        <p className="text-sm font-semibold text-yellow-600 mb-1">Needs Attention</p>
+                        <p className={`text-xs ${textSecondary}`}>Review within 30 days</p>
                     </div>
 
                     {/* Healthy */}
-                     <div className={`p-4 rounded-xl border-l-4 border-emerald-500 ${Dark ? "bg-gray-800" : "bg-gray-50"}`}>
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">Healthy</p>
-                                <p className="text-2xl font-bold">{healthyCount}</p>
-                                <p className={`text-xs ${textSecondary} mt-1`}>Next check: 90 days</p>
+                     <div className={`p-5 rounded-xl border ${Dark ? "bg-emerald-500/5 border-emerald-500/20" : "bg-emerald-50 border-emerald-200"}`}>
+                        <div className="flex justify-between items-start mb-3">
+                            <div className={`p-2.5 rounded-lg ${Dark ? "bg-emerald-500/10" : "bg-emerald-100"}`}>
+                                <Calendar size={20} className="text-emerald-600" />
                             </div>
-                            <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
-                                <Calendar size={18} />
-                            </div>
+                            <span className={`text-xs font-semibold px-2 py-1 rounded ${Dark ? "bg-emerald-500/20 text-emerald-400" : "bg-emerald-200 text-emerald-700"}`}>
+                                Good
+                            </span>
                         </div>
+                        <p className="text-3xl font-bold mb-1">{healthyCount}</p>
+                        <p className="text-sm font-semibold text-emerald-600 mb-1">Up to Date</p>
+                        <p className={`text-xs ${textSecondary}`}>Next review in 90 days</p>
                     </div>
                 </div>
-            </div>
           </div>
 
           {/* Stats Section */}
@@ -223,7 +219,6 @@ const Dashboard = () => {
               {latestRun ? (
                 <div className="overflow-x-auto mt-4">
                   <table className="min-w-full text-left text-sm">
-                    {/* Simplified for brevity, add your table headers/rows back here */}
                     <thead className={`border-b ${Dark ? "border-gray-700" : "border-gray-100"}`}>
                         <tr>
                             <th className="pb-2 font-medium">Provider</th>
