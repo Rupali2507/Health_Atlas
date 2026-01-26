@@ -333,20 +333,20 @@ def batch_verify_licenses(license_data: list) -> list:
 
 def search_google_scholar(provider_name: str, year_min: int = 2024) -> dict:
     """
-    Search Google Scholar for recent publications using Serper API
+    Search Google Scholar for recent publications using Serper API.
     
-    Get API key from: https://serper.dev/
-    Free tier: 2,500 searches/month
+    Args:
+        provider_name (str): The search query (e.g., "DeepSeek R1").
+        year_min (int): The oldest year to include (default 2024).
     """
     from dotenv import load_dotenv
     load_dotenv()
-    
+        
     api_key = os.getenv("SERPER_API_KEY")
-    
     if not api_key:
         return {"error": "SERPER_API_KEY not found in .env file"}
     
-    print(f"  📚 Searching Google Scholar for: {provider_name}")
+    print(f" 📚 Searching Google Scholar for: {provider_name} (Since {year_min})")
     
     try:
         url = "https://google.serper.dev/scholar"
@@ -354,7 +354,8 @@ def search_google_scholar(provider_name: str, year_min: int = 2024) -> dict:
         payload = {
             "q": f'"{provider_name}"',
             "num": 10,
-            "tbs": f"cdr:1,cd_min:1/1/{year_min},cd_max:12/31/2025"  # Date range
+            "as_ylo": year_min,  # Correct parameter for Scholar Min Year
+            # "as_yhi": 2026     # Optional: Max Year (usually not needed)
         }
         
         headers = {
@@ -363,6 +364,7 @@ def search_google_scholar(provider_name: str, year_min: int = 2024) -> dict:
         }
         
         response = requests.post(url, json=payload, headers=headers, timeout=10)
+        response.raise_for_status() # Raise error for 4xx/5xx bad responses
         data = response.json()
         
         publications = []
@@ -370,24 +372,26 @@ def search_google_scholar(provider_name: str, year_min: int = 2024) -> dict:
         if 'organic' in data:
             for result in data['organic']:
                 publications.append({
-                    "title": result.get("title", ""),
+                    "title": result.get("title", "No Title"),
                     "snippet": result.get("snippet", ""),
-                    "publication_info": result.get("publicationInfo", ""),
+                    # Serper sometimes varies keys; check for both camelCase and snake_case
+                    "publication_info": result.get("publicationInfo") or result.get("publication_info", ""),
                     "cited_by": result.get("citedBy", 0),
-                    "link": result.get("link", "")
+                    "link": result.get("link", ""),
+                    "year": result.get("year", "Unknown") # Serper often extracts the year explicitly
                 })
         
-        print(f"  ✅ Found {len(publications)} recent publications")
+        print(f" ✅ Found {len(publications)} recent publications")
         
         return {
             "publication_count": len(publications),
             "publications": publications,
             "search_date": datetime.now().isoformat(),
-            "query": f'"{provider_name}"'
+            "query": provider_name
         }
         
     except Exception as e:
-        print(f"  ⚠️ Google Scholar search failed: {e}")
+        print(f" ⚠️ Google Scholar search failed: {e}")
         return {"error": str(e), "publication_count": 0}
 
 
