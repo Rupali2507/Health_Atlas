@@ -30,35 +30,21 @@ from production_tools import (
     search_provider_web_presence
 )
 
+from database_setup import (
+    save_validated_provider,
+    save_to_review_queue,
+    init_database
+)
+
 # ============================================
 # DATABASE INITIALIZATION
 # ============================================
-def init_review_queue_db():
-    """Initialize SQLite database for human review queue."""
-    conn = sqlite3.connect("review_queue.db")
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS review_queue (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            provider_name TEXT,
-            npi TEXT,
-            confidence REAL,
-            flags TEXT,
-            status TEXT,
-            review_reason TEXT,
-            created_at TEXT,
-            reviewed_at TEXT,
-            reviewer_notes TEXT
-        )
-    """)
-    
-    conn.commit()
-    conn.close()
-    print("✅ Review queue database initialized")
+def init_databases():
+    """Initialize PostgreSQL database."""
+    print("✅ Initializing PostgreSQL database...")
+    init_database()
 
-# Initialize on module load
-init_review_queue_db()
+init_databases()
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -1063,47 +1049,33 @@ def hitl_decision_node(state: AgentState) -> Literal["auto_approve", "human_revi
 
 def human_review_interrupt_node(state: AgentState) -> dict:
     """
-    OPTION B: Manual Human-in-the-Loop (SQLite Queue)
+    🔴 HUMAN REVIEW: Save to PostgreSQL review queue
     """
-
     print("\n┌─────────────────────────────────────────┐")
     print("│ HUMAN REVIEW REQUIRED                  │")
     print("└─────────────────────────────────────────┘")
 
     try:
-        conn = sqlite3.connect("review_queue.db")
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            INSERT INTO review_queue
-            (provider_name, npi, confidence, flags, status, review_reason, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            state["initial_data"].get("full_name"),
-            state["initial_data"].get("NPI"),
-            state.get("confidence_score"),
-            json.dumps(state.get("qa_flags", [])),
-            "PENDING",
-            state.get("review_reason"),
-            datetime.datetime.now().isoformat()
-        ))
-
-        review_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-
-        print(f"📋 Review Queue Entry #{review_id} created")
-        print(f"   Reason: {state.get('review_reason')}")
-        print(f"   Confidence: {state.get('confidence_score', 0):.2%}")
-
+        # Save to PostgreSQL review queue
+        review_id = save_to_review_queue(
+            provider_data=state["initial_data"],
+            state=state
+        )
+        
+        if review_id:
+            print(f"📋 Review Queue Entry #{review_id} created")
+            print(f"   Reason: {state.get('review_reason')}")
+            print(f"   Confidence: {state.get('confidence_score', 0):.2%}")
+        else:
+            print("⚠️ Failed to save to review queue")
+            
     except Exception as e:
         print(f"⚠️ Failed to save to review queue: {e}")
         review_id = None
 
-    # ---- CRITICAL: Set final_profile from golden_record ----
+    # Build final profile
     final_profile = state.get("golden_record", {})
     
-    # Fallback if golden_record is empty
     if not final_profile or not final_profile.get("provider_name"):
         final_profile = {
             "provider_name": state["initial_data"].get("full_name"),
@@ -1114,14 +1086,15 @@ def human_review_interrupt_node(state: AgentState) -> dict:
         }
 
     return {
-        "final_profile": final_profile,  # ← CRITICAL: Must be set
-        "log": [f"HITL: Sent to manual review (ID {review_id})"]
+        "final_profile": final_profile,
+        "log": [f"HITL: Sent to PostgreSQL review queue (ID {review_id})"]
     }
 
-
 def auto_approve_node(state: AgentState) -> dict:
-    """Auto-approval and database commit."""
-    print("\n✅ AUTO-APPROVED: Committing to database...")
+    """
+    ✅ AUTO-APPROVE: Save to PostgreSQL validated_providers table
+    """
+    print("\n✅ AUTO-APPROVED: Committing to PostgreSQL database...")
     
     golden_record = state.get("golden_record", {})
     
@@ -1133,77 +1106,37 @@ def auto_approve_node(state: AgentState) -> dict:
             "specialty": state["initial_data"].get("specialty"),
             "address": state["initial_data"].get("address"),
             "phone": state["initial_data"].get("phone"),
+            "city": state["initial_data"].get("city", ""),
+            "state": state["initial_data"].get("state", ""),
+            "zip_code": state["initial_data"].get("zip_code", ""),
+            "website": state["initial_data"].get("website", ""),
+            "license_status": state.get("state_board_result", {}).get("status"),
+            "license_number": state["initial_data"].get("license_number", ""),
+            "license_state": state["initial_data"].get("state", ""),
+            "oig_excluded": state.get("oig_leie_result", {}).get("is_excluded", False),
+            "digital_footprint_score": state.get("digital_footprint_score", 0),
+            "education": [],
+            "certifications": [],
+            "languages": [],
+            "insurance_accepted": [],
+            "data_sources": {}
         }
     
-    # DATABASE COMMIT
+    # Save to PostgreSQL
     try:
-        save_to_database(golden_record, state)
-        print("  ✓ Successfully saved to database")
+        provider_id = save_validated_provider(golden_record, state)
+        if provider_id:
+            print(f"  ✓ Successfully saved to PostgreSQL (ID: {provider_id})")
+        else:
+            print("  ✗ Database save failed")
     except Exception as e:
-        logger.error(f"Database save failed: {e}")
+        logger.error(f"PostgreSQL save failed: {e}")
         print(f"  ✗ Database save failed: {e}")
     
     return {
-        "final_profile": golden_record,  # ← CRITICAL: Must be set
-        "log": [f"AUTO-APPROVED: Confidence {state.get('confidence_score', 0):.2%}"]
+        "final_profile": golden_record,
+        "log": [f"AUTO-APPROVED: Saved to PostgreSQL - Confidence {state.get('confidence_score', 0):.2%}"]
     }
-
-# ============================================
-# DATABASE FUNCTIONS
-# ============================================
-def save_to_database(golden_record: dict, state: AgentState):
-    """
-    Save validated provider to database.
-    
-    Options:
-    1. PostgreSQL with SQLAlchemy
-    2. MongoDB
-    3. Supabase
-    4. CSV export (for testing)
-    """
-    # OPTION 1: PostgreSQL (recommended)
-    # from sqlalchemy import create_engine
-    # engine = create_engine(os.getenv("DATABASE_URL"))
-    # with engine.connect() as conn:
-    #     conn.execute("""
-    #         INSERT INTO providers (npi, name, specialty, ...)
-    #         VALUES (:npi, :name, :specialty, ...)
-    #         ON CONFLICT (npi) DO UPDATE SET ...
-    #     """, golden_record)
-    
-    # OPTION 2: MongoDB
-    # from pymongo import MongoClient
-    # client = MongoClient(os.getenv("MONGO_URI"))
-    # db = client.healthcare
-    # db.providers.update_one(
-    #     {"npi": golden_record["npi"]},
-    #     {"$set": golden_record},
-    #     upsert=True
-    # )
-    
-    # OPTION 3: CSV Export (for testing)
-    output_dir = Path(__file__).parent / "output"
-    output_dir.mkdir(exist_ok=True)
-    
-    import csv
-    csv_file = output_dir / "validated_providers.csv"
-    
-    file_exists = csv_file.exists()
-    with open(csv_file, 'a', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=golden_record.keys())
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(golden_record)
-    
-    # Also save metadata
-    metadata_file = output_dir / f"metadata_{golden_record['npi']}.json"
-    with open(metadata_file, 'w') as f:
-        json.dump({
-            "golden_record": golden_record,
-            "quality_metrics": state.get("quality_metrics", {}),
-            "execution_metadata": state.get("execution_metadata", {}),
-            "confidence_score": state.get("confidence_score", 0)
-        }, f, indent=2)
 
 # ============================================
 # GRAPH CONSTRUCTION
