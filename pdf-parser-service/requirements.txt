@@ -1,5 +1,0 @@
-#requirements
-fastapi
-uvicorn
-marker-pdf[full]
-python-multipart

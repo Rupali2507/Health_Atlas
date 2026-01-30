@@ -316,9 +316,10 @@ const Upload = () => {
                 <span className={`font-medium text-lg ${Dark ? "text-gray-200" : "text-gray-700"}`}>
                   {selectedFile ? selectedFile.name : "Click to upload or drag and drop"}
                 </span>
-                <span className={`text-sm mt-1 ${textSecondary}`}>CSV or PDF (max. 50MB)</span>
+                <span className={`text-sm mt-1 ${textSecondary}`}>  CSV, PDF, or Image (JPG/PNG) - max. 50MB
+</span>
               </div>
-              <input type="file" accept=".csv,.pdf" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+              <input type="file" accept=".csv,.pdf,.jpg,.jpeg,.png" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
               <div className="mt-6 flex justify-end">
                 <button
                   className={`py-2.5 px-6 rounded-lg font-medium flex items-center gap-2 transition text-white ${
