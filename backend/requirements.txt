@@ -53,3 +53,8 @@ sqlalchemy
 psycopg2-binary 
 python-dotenv
 alembic
+
+openai
+anthropic
+pydantic
+
