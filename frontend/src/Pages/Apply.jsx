@@ -135,7 +135,7 @@ const Apply = () => {
     dbForm.append("fullName", formData.name);
     dbForm.append("email", formData.email);
     dbForm.append("phoneNumber", formData.phone);
-    dbForm.append("speciality", formData.specialty);
+    dbForm.append("specialty", formData.specialty);
     dbForm.append("licenseNumber", formData.licenseNumber);
     dbForm.append("npiId", formData.npiId);
     dbForm.append("practiceAddress", formData.address);
