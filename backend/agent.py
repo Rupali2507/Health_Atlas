@@ -964,7 +964,7 @@ def confidence_scorer_with_hitl_node(state: AgentState) -> dict:
     requires_human_review = False
     review_reason = ""
     
-    if final_score >= 0.90:
+    if final_score >= 0.85:
         tier = "PLATINUM"
         tier_desc = "Auto-approved - Commit to database"
         tier_emoji = "🟢"
