@@ -204,7 +204,7 @@ export default function FlowChart() {
             {/* DIRECTORY MANAGEMENT AGENT (ADDED HERE) */}
             <Section step="06" title="Directory Management Agent (Routing + Output + Workflow)">
               <div className="grid md:grid-cols-3 gap-6 text-center">
-                <Node title="PLATINUM ≥ 0.82" subtitle="Auto Commit → validated_providers" accent="green" />
+                <Node title="PLATINUM ≥ 0.85" subtitle="Auto Commit → validated_providers" accent="green" />
                 <Node title="GOLD ≥ 0.65" subtitle="Auto + Monitoring" accent="amber" />
                 <Node title="RED < 0.65" subtitle="Human Review → review_queue" accent="red" />
                 <Node title="Directory Output Engine" subtitle="Web • Mobile • PDF Generation" accent="cyan" />
