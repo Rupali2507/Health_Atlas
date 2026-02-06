@@ -59,4 +59,5 @@ anthropic
 pydantic
 
 openpyxl
+google-search-results
 

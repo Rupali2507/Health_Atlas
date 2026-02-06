@@ -3,11 +3,10 @@ Production-Ready Tools for Healthcare Provider Verification
 ============================================================
 
 Installation Requirements:
-pip install requests beautifulsoup4 selenium googlemaps serper-python python-dotenv pandas
+pip install requests beautifulsoup4 selenium serper-python python-dotenv pandas geopy
 
 Environment Variables (.env file):
 SERPER_API_KEY=your_serper_key_here
-GOOGLE_MAPS_API_KEY=your_google_maps_key_here
 """
 
 import requests
@@ -18,7 +17,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
-import googlemaps
 import time
 import re
 from typing import Dict, Optional, List
@@ -214,19 +212,7 @@ def verify_state_license_universal(state_code: str, license_number: str,
         provider_name: Full name of the provider (last name will be extracted)
         
     Returns:
-        Dictionary containing verification results:
-        - verified: bool - Whether license was successfully verified
-        - state: str - State code
-        - license_number: str - License number checked
-        - provider_name: str - Name found on license (if verified)
-        - status: str - License status (Active, Expired, etc.)
-        - expiration_date: str - License expiration date
-        - name_match: bool - Whether provider name matches
-        - has_disciplinary_actions: bool - Whether there are disciplinary actions
-        - source: str - Verification source
-        - verification_date: str - When verification was performed
-        - active: bool - Whether license is currently active
-        - error: str - Error message (if verification failed)
+        Dictionary containing verification results
     """
     
     print(f"\n🔍 Verifying {state_code} license: {license_number}")
@@ -336,8 +322,8 @@ def search_google_scholar(provider_name: str, year_min: int = 2024) -> dict:
     Search Google Scholar for recent publications using Serper API.
     
     Args:
-        provider_name (str): The search query (e.g., "DeepSeek R1").
-        year_min (int): The oldest year to include (default 2024).
+        provider_name (str): The search query
+        year_min (int): The oldest year to include (default 2024)
     """
     from dotenv import load_dotenv
     load_dotenv()
@@ -354,8 +340,7 @@ def search_google_scholar(provider_name: str, year_min: int = 2024) -> dict:
         payload = {
             "q": f'"{provider_name}"',
             "num": 10,
-            "as_ylo": year_min,  # Correct parameter for Scholar Min Year
-            # "as_yhi": 2026     # Optional: Max Year (usually not needed)
+            "as_ylo": year_min,
         }
         
         headers = {
@@ -364,7 +349,7 @@ def search_google_scholar(provider_name: str, year_min: int = 2024) -> dict:
         }
         
         response = requests.post(url, json=payload, headers=headers, timeout=10)
-        response.raise_for_status() # Raise error for 4xx/5xx bad responses
+        response.raise_for_status()
         data = response.json()
         
         publications = []
@@ -374,11 +359,10 @@ def search_google_scholar(provider_name: str, year_min: int = 2024) -> dict:
                 publications.append({
                     "title": result.get("title", "No Title"),
                     "snippet": result.get("snippet", ""),
-                    # Serper sometimes varies keys; check for both camelCase and snake_case
                     "publication_info": result.get("publicationInfo") or result.get("publication_info", ""),
                     "cited_by": result.get("citedBy", 0),
                     "link": result.get("link", ""),
-                    "year": result.get("year", "Unknown") # Serper often extracts the year explicitly
+                    "year": result.get("year", "Unknown")
                 })
         
         print(f" ✅ Found {len(publications)} recent publications")
@@ -396,105 +380,258 @@ def search_google_scholar(provider_name: str, year_min: int = 2024) -> dict:
 
 
 # ============================================
-# 4. GEO-VERIFICATION (GOOGLE MAPS API)
+# 4. GEO-VERIFICATION (FREE ALTERNATIVES)
 # ============================================
+
+def geocode_address_nominatim(address: str, city: str, state: str, zip_code: str) -> dict:
+    """
+    Geocode address using Nominatim (OpenStreetMap) - FREE
+    
+    No API key required!
+    Rate limit: 1 request per second
+    """
+    full_address = f"{address}, {city}, {state} {zip_code}, USA"
+    
+    try:
+        # Nominatim API (OpenStreetMap's geocoder)
+        url = "https://nominatim.openstreetmap.org/search"
+        
+        params = {
+            'q': full_address,
+            'format': 'json',
+            'limit': 1,
+            'addressdetails': 1
+        }
+        
+        headers = {
+            'User-Agent': 'HealthcareProviderVerification/1.0'  # Required by Nominatim
+        }
+        
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        results = response.json()
+        
+        if results:
+            result = results[0]
+            return {
+                "success": True,
+                "latitude": float(result['lat']),
+                "longitude": float(result['lon']),
+                "formatted_address": result.get('display_name', ''),
+                "address_details": result.get('address', {}),
+                "osm_type": result.get('osm_type', ''),
+                "osm_id": result.get('osm_id', '')
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Address not found"
+            }
+            
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+def check_nearby_medical_facilities_overpass(lat: float, lon: float, radius: int = 50) -> dict:
+    """
+    Check for nearby medical facilities using Overpass API (OpenStreetMap) - FREE
+    
+    No API key required!
+    Checks within specified radius (in meters) for medical facilities
+    """
+    try:
+        # Overpass API query for medical facilities
+        # Tags: amenity=hospital, doctors, clinic, dentist, pharmacy, etc.
+        
+        overpass_url = "https://overpass-api.de/api/interpreter"
+        
+        # Overpass QL query
+        query = f"""
+        [out:json][timeout:25];
+        (
+          node["amenity"~"hospital|doctors|clinic|dentist|pharmacy"]["name"](around:{radius},{lat},{lon});
+          way["amenity"~"hospital|doctors|clinic|dentist|pharmacy"]["name"](around:{radius},{lat},{lon});
+          node["healthcare"](around:{radius},{lat},{lon});
+          way["healthcare"](around:{radius},{lat},{lon});
+        );
+        out body;
+        """
+        
+        response = requests.post(overpass_url, data={'data': query}, timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        elements = data.get('elements', [])
+        
+        medical_facilities = []
+        
+        for element in elements:
+            tags = element.get('tags', {})
+            medical_facilities.append({
+                "name": tags.get('name', 'Unknown'),
+                "amenity": tags.get('amenity', tags.get('healthcare', 'medical')),
+                "healthcare": tags.get('healthcare', ''),
+                "address": tags.get('addr:street', ''),
+                "city": tags.get('addr:city', ''),
+                "osm_type": element.get('type', ''),
+                "osm_id": element.get('id', '')
+            })
+        
+        return {
+            "success": True,
+            "facility_count": len(medical_facilities),
+            "facilities": medical_facilities,
+            "is_medical_area": len(medical_facilities) > 0
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "facility_count": 0
+        }
+
 
 def verify_medical_facility(address: str, city: str, state: str, zip_code: str) -> dict:
     """
-    Verify if address is a medical facility using Google Maps Places API
+    Verify if address is a medical facility using FREE OpenStreetMap data
     
-    Get API key from: https://console.cloud.google.com/
-    Enable: Maps JavaScript API, Places API, Geocoding API
+    NO API KEY REQUIRED! 100% Free
+    
+    Uses:
+    1. Nominatim for geocoding (OSM)
+    2. Overpass API for nearby medical facility search (OSM)
     """
-    from dotenv import load_dotenv
-    load_dotenv()
-    
-    api_key = os.getenv("GOOGLE_MAPS_API_KEY")
-    
-    if not api_key:
-        return {"error": "GOOGLE_MAPS_API_KEY not found in .env file"}
-    
     full_address = f"{address}, {city}, {state} {zip_code}"
-    print(f"  📍 Geo-verifying: {full_address}")
+    print(f"  📍 Geo-verifying (FREE): {full_address}")
     
     try:
-        gmaps = googlemaps.Client(key=api_key)
+        # Step 1: Geocode the address using Nominatim
+        time.sleep(1)  # Respect Nominatim rate limit (1 req/sec)
         
-        # Step 1: Geocode the address
-        geocode_result = gmaps.geocode(full_address)
+        geocode_result = geocode_address_nominatim(address, city, state, zip_code)
         
-        if not geocode_result:
-            print(f"  ❌ Address not found in Google Maps")
+        if not geocode_result.get('success'):
+            print(f"  ❌ Address not found in OpenStreetMap")
             return {
                 "is_medical_facility": False,
                 "facility_type": "Address Not Found",
-                "confidence": 0.0
+                "confidence": 0.0,
+                "error": geocode_result.get('error')
             }
         
-        location = geocode_result[0]['geometry']['location']
-        formatted_address = geocode_result[0]['formatted_address']
+        lat = geocode_result['latitude']
+        lon = geocode_result['longitude']
+        formatted_address = geocode_result['formatted_address']
         
-        # Step 2: Places Nearby Search
-        places_result = gmaps.places_nearby(
-            location=location,
-            radius=50,  # 50 meters
-            type='health'  # Medical facility type
-        )
+        print(f"  ✅ Geocoded: {lat}, {lon}")
         
-        # Step 3: Check if exact location is medical
-        is_medical = False
-        facility_type = "Unknown"
-        place_types = []
+        # Step 2: Check for nearby medical facilities using Overpass API
+        time.sleep(1)  # Be polite to free services
         
-        if places_result['results']:
-            # Get the first result (closest match)
-            place = places_result['results'][0]
-            place_types = place.get('types', [])
-            
-            medical_types = [
-                'doctor', 'hospital', 'health', 'dentist', 
-                'physiotherapist', 'pharmacy', 'medical_lab'
-            ]
-            
-            is_medical = any(t in place_types for t in medical_types)
-            
-            if is_medical:
-                facility_type = "Medical Facility"
-                print(f"  ✅ Confirmed medical facility: {place.get('name', 'Unknown')}")
-            else:
-                facility_type = "Non-Medical"
-                print(f"  ⚠️ Location is: {', '.join(place_types[:3])}")
+        nearby_result = check_nearby_medical_facilities_overpass(lat, lon, radius=50)
         
-        # Step 4: Additional fraud checks
+        if not nearby_result.get('success'):
+            print(f"  ⚠️ Could not check nearby facilities")
+            return {
+                "is_medical_facility": None,
+                "error": nearby_result.get('error'),
+                "coordinates": {"lat": lat, "lng": lon}
+            }
+        
+        # Step 3: Analyze results
+        facility_count = nearby_result['facility_count']
+        facilities = nearby_result.get('facilities', [])
+        
+        is_medical = facility_count > 0
+        facility_type = "Medical Facility" if is_medical else "Non-Medical"
+        
+        if is_medical:
+            print(f"  ✅ Found {facility_count} medical facilities nearby")
+            if facilities:
+                print(f"     Closest: {facilities[0].get('name', 'Unknown')}")
+        else:
+            print(f"  ⚠️ No medical facilities found within 50m")
+        
+        # Step 4: Fraud indicators
         fraud_indicators = []
         
-        # Check if residential
-        if 'street_address' in geocode_result[0].get('types', []):
-            if 'establishment' not in geocode_result[0].get('types', []):
-                fraud_indicators.append("Appears to be residential address")
+        # Check OSM address details
+        address_details = geocode_result.get('address_details', {})
         
-        # Check if parking lot
-        if 'parking' in place_types:
-            fraud_indicators.append("Address is a parking lot")
+        if address_details.get('building') == 'residential':
+            fraud_indicators.append("Appears to be residential building")
+        
+        if 'parking' in address_details.get('amenity', '').lower():
+            fraud_indicators.append("Address is a parking area")
         
         return {
             "is_medical_facility": is_medical,
             "facility_type": facility_type,
-            "place_types": place_types,
+            "nearby_facilities": facilities[:5],  # Top 5
+            "facility_count": facility_count,
             "formatted_address": formatted_address,
             "coordinates": {
-                "lat": location['lat'],
-                "lng": location['lng']
+                "lat": lat,
+                "lng": lon
             },
             "fraud_indicators": fraud_indicators,
             "confidence": 1.0 if is_medical else 0.3,
-            "check_date": datetime.now().isoformat()
+            "check_date": datetime.now().isoformat(),
+            "data_source": "OpenStreetMap (Nominatim + Overpass API)"
         }
         
     except Exception as e:
         print(f"  ⚠️ Geo-verification failed: {e}")
         return {
             "is_medical_facility": None,
+            "error": str(e)
+        }
+
+
+def reverse_geocode_nominatim(lat: float, lon: float) -> dict:
+    """
+    Reverse geocode coordinates to address using Nominatim - FREE
+    
+    Useful for verifying coordinates or finding address from GPS
+    """
+    try:
+        url = "https://nominatim.openstreetmap.org/reverse"
+        
+        params = {
+            'lat': lat,
+            'lon': lon,
+            'format': 'json',
+            'addressdetails': 1
+        }
+        
+        headers = {
+            'User-Agent': 'HealthcareProviderVerification/1.0'
+        }
+        
+        time.sleep(1)  # Rate limit
+        
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        result = response.json()
+        
+        return {
+            "success": True,
+            "formatted_address": result.get('display_name', ''),
+            "address_details": result.get('address', {}),
+            "osm_type": result.get('osm_type', ''),
+            "category": result.get('category', ''),
+            "type": result.get('type', '')
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
             "error": str(e)
         }
 
@@ -627,8 +764,8 @@ def comprehensive_provider_verification(provider_data: dict) -> dict:
         provider_name=f"{provider_data.get('first_name')} {provider_data.get('last_name')}"
     )
     
-    # 3. Geo-Verification
-    print("\n3️⃣ Running Geo-Verification...")
+    # 3. Geo-Verification (FREE - OpenStreetMap)
+    print("\n3️⃣ Running Geo-Verification (OpenStreetMap)...")
     report['checks']['geo_verification'] = verify_medical_facility(
         address=provider_data.get('address'),
         city=provider_data.get('city'),
@@ -700,6 +837,7 @@ def comprehensive_provider_verification(provider_data: dict) -> dict:
 if __name__ == "__main__":
     print("="*60)
     print("PRODUCTION TOOLS - USAGE EXAMPLES")
+    print("Using FREE mapping alternatives (OpenStreetMap)")
     print("="*60)
     
     # Example: Comprehensive Verification
