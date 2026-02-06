@@ -9,6 +9,8 @@ import {
 } from "react-icons/hi";
 import { useHealthContext } from "../Context/HealthContext";
 import { useNavigate } from "react-router-dom";
+import { HiOutlineChartBar } from "react-icons/hi";
+
 
 const Sidebar = () => {
   const { Dark } = useHealthContext();
@@ -37,9 +39,8 @@ const Sidebar = () => {
 
       {/* Sidebar */}
       <div
-        className={`fixed h-screen lg:fixed inset-y-0 left-0 transform ${
-          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } ${sidebarBg} lg:translate-x-0 transition-transform duration-300 ease-in-out lg:flex flex-col h-screen w-[70%] sm:w-[50%] md:w-[35%] lg:w-[20%] border-r-2 border-gray-300 shadow-lg z-40`}
+        className={`fixed h-screen lg:fixed inset-y-0 left-0 transform ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+          } ${sidebarBg} lg:translate-x-0 transition-transform duration-300 ease-in-out lg:flex flex-col h-screen w-[70%] sm:w-[50%] md:w-[35%] lg:w-[20%] border-r-2 border-gray-300 shadow-lg z-40`}
       >
         {/* Header */}
         <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200">
@@ -48,9 +49,8 @@ const Sidebar = () => {
           </div>
           <HiOutlineChevronLeft
             onClick={toggleSidebar}
-            className={`w-5 h-5 cursor-pointer lg:hidden ${
-              Dark ? "text-white" : "text-gray-700"
-            }`}
+            className={`w-5 h-5 cursor-pointer lg:hidden ${Dark ? "text-white" : "text-gray-700"
+              }`}
           />
         </div>
 
@@ -86,6 +86,15 @@ const Sidebar = () => {
             <HiUser className="w-5 h-5" />
             <div>New Provider</div>
           </div>
+
+          <div
+            onClick={() => navigate("/flowchart")}
+            className={`flex items-center gap-4 p-3 cursor-pointer ${hoverBg}`}
+          >
+            <HiOutlineChartBar className="w-5 h-5" />
+            <div>Flow Chart</div>
+          </div>
+
         </div>
       </div>
     </>

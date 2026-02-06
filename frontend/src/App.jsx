@@ -9,13 +9,15 @@ import Provider from "./Pages/Provider";
 import ProviderDetail from "./Pages/ProviderDetail";
 import Apply from "./Pages/Apply";
 import ProtectedRoute from "./Components/ProtectedRoute";
+import FlowChart from "./Pages/FlowChart";
+
 
 const App = () => {
   useEffect(() => {
     Promise.allSettled([
-      fetch("http://localhost:8080/api/health").catch(() => {}),
+      fetch("http://localhost:8080/api/health").catch(() => { }),
       fetch("http://localhost:8000/api/health").catch(
-        () => {}
+        () => { }
       ),
     ]).then(() => console.log("Servers warmed up"));
   }, []);
@@ -46,6 +48,15 @@ const App = () => {
         <Route path="/provider" element={<Provider />} />
         <Route path="/provider-detail" element={<ProviderDetail />} />
         <Route path="/new-user" element={<Apply />} />
+        <Route
+          path="/flowchart"
+          element={
+            <ProtectedRoute>
+              <FlowChart />
+            </ProtectedRoute>
+          }
+        />
+
       </Routes>
     </div>
   );
