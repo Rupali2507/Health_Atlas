@@ -39,7 +39,7 @@ const Navbar = ({
     >
       <div className="flex justify-between items-center px-5 py-4 max-w-7xl mx-auto">
         {/* Logo */}
-        <div className="w-24 h-24 cursor-pointer" onClick={() => navigate("/")}>
+        <div className="w-24 h-24 cursor-pointer" onClick={() => navigate("/dashboard")}>
           <img src={assets.logo} alt="Logo" className="w-full h-full" />
         </div>
 
