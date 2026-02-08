@@ -479,38 +479,52 @@ def save_validated_provider(golden_record: dict, state: dict) -> Optional[int]:
 def save_to_review_queue(provider_data: dict, state: dict) -> Optional[int]:
     """
     🔴 SAVE TO REVIEW QUEUE
-    
+
     Called when a provider needs human review (RED path).
-    
-    Args:
-        provider_data: The initial provider data
-        state: The agent state with QA results
-    
-    Returns:
-        Review queue ID, or None if failed
     """
     db = SessionLocal()
     try:
+        # -----------------------------
+        # PRIORITY CALCULATION LOGIC
+        # -----------------------------
+        confidence = state.get("confidence_score", 1)
+        fraud = state.get("fraud_indicators", [])
+        risk_score = state.get("quality_metrics", {}).get("risk_score", 0)
+
+        if fraud:
+            priority = "HIGH"
+        elif confidence < 0.5:
+            priority = "HIGH"
+        elif risk_score >= 10:
+            priority = "HIGH"
+        elif confidence < 0.65:
+            priority = "NORMAL"
+        else:
+            priority = "LOW"
+
+        # -----------------------------
+        # CREATE REVIEW ENTRY
+        # -----------------------------
         review_entry = ReviewQueue(
-            provider_name=provider_data.get('full_name'),
-            npi=provider_data.get('NPI'),
-            confidence_score=state.get('confidence_score'),
-            review_reason=state.get('review_reason'),
-            flags=state.get('qa_flags', []),
-            fraud_indicators=state.get('fraud_indicators', []),
-            status='PENDING',
-            priority='HIGH' if state.get('fraud_indicators') else 'NORMAL',
+            provider_name=provider_data.get("full_name"),
+            npi=provider_data.get("NPI"),
+            confidence_score=confidence,
+            review_reason=state.get("review_reason"),
+            flags=state.get("qa_flags", []),
+            fraud_indicators=fraud,
+            status="PENDING",
+            priority=priority,
             original_data=provider_data,
-            validation_result=state.get('quality_metrics', {})
+            validation_result=state.get("quality_metrics", {})
         )
-        
+
         db.add(review_entry)
         db.commit()
-        
+
         review_id = review_entry.id
-        print(f"📋 Added to review queue! ID: {review_id}")
+        print(f"📋 Added to review queue! ID: {review_id} | Priority: {priority}")
         return review_id
-        
+
     except Exception as e:
         db.rollback()
         print(f"❌ Error saving to review queue: {e}")

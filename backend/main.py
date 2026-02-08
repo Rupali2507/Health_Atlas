@@ -915,6 +915,124 @@ async def get_dashboard_stats():
             "error": str(e),
             "stats": {}
         }
+    
+@app.get("/api/review-queue")
+async def get_review_queue(status: str = "PENDING"):
+    """Get review queue items"""
+    from database_setup import SessionLocal, ReviewQueue
+    
+    db = SessionLocal()
+    try:
+        reviews = db.query(ReviewQueue).filter_by(status=status).order_by(
+            ReviewQueue.priority.desc(),
+            ReviewQueue.created_at.asc()
+        ).all()
+        
+        return {
+            "success": True,
+            "items": [r.to_dict() for r in reviews],
+            "total": len(reviews)
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/review-queue/{review_id}/approve")
+async def approve_review(review_id: int, data: dict):
+    """Approve a provider from review queue"""
+    from database_setup import SessionLocal, ReviewQueue, save_validated_provider
+    
+    db = SessionLocal()
+    try:
+        # Get review item
+        review = db.query(ReviewQueue).filter_by(id=review_id).first()
+        
+        if not review:
+            raise HTTPException(status_code=404, detail="Review not found")
+        
+        # Convert to golden_record format
+        golden_record = {
+            "provider_name": review.provider_name,
+            "npi": review.npi,
+            "specialty": review.original_data.get("specialty", ""),
+            "address": review.original_data.get("address", ""),
+            "city": review.original_data.get("city", ""),
+            "state": review.original_data.get("state", ""),
+            "zip_code": review.original_data.get("zip_code", ""),
+            "phone": review.original_data.get("phone", ""),
+            "website": review.original_data.get("website", ""),
+            "license_status": "MANUAL_APPROVAL",
+            "oig_excluded": False,
+        }
+        
+        # Create state with manual approval tier
+        state = {
+            "confidence_score": 0.75,  # Manual approval = 75%
+            "quality_metrics": {
+                "confidence_tier": "MANUAL_APPROVAL"
+            },
+            "qa_flags": [],
+            "fraud_indicators": [],
+            "execution_metadata": {}
+        }
+        
+        # Save to validated_providers
+        provider_id = save_validated_provider(golden_record, state)
+        
+        # Update review status
+        review.status = 'APPROVED'
+        review.reviewed_at = datetime.now()
+        review.reviewer_name = data.get('reviewer_name')
+        review.reviewer_notes = data.get('reviewer_notes')
+        review.reviewer_decision = 'APPROVE'
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": f"Provider approved and added to validated_providers (ID: {provider_id})"
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.post("/api/review-queue/{review_id}/reject")
+async def reject_review(review_id: int, data: dict):
+    """Reject a provider"""
+    from database_setup import SessionLocal, ReviewQueue
+    
+    db = SessionLocal()
+    try:
+        review = db.query(ReviewQueue).filter_by(id=review_id).first()
+        
+        if not review:
+            raise HTTPException(status_code=404, detail="Review not found")
+        
+        review.status = 'REJECTED'
+        review.reviewed_at = datetime.now()
+        review.reviewer_name = data.get('reviewer_name')
+        review.reviewer_notes = data.get('reviewer_notes')
+        review.reviewer_decision = 'REJECT'
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "Provider rejected"
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+    
+
 
 
 if __name__ == "__main__":

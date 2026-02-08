@@ -10,6 +10,8 @@ import ProviderDetail from "./Pages/ProviderDetail";
 import Apply from "./Pages/Apply";
 import ProtectedRoute from "./Components/ProtectedRoute";
 import FlowChart from "./Pages/FlowChart";
+import ReviewQueue from './Pages/ReviewQueue';
+
 
 
 const App = () => {
@@ -47,6 +49,8 @@ const App = () => {
         />
         <Route path="/provider" element={<Provider />} />
         <Route path="/provider-detail" element={<ProviderDetail />} />
+        <Route path="/review-queue" element={<ReviewQueue />} />
+
         <Route path="/new-user" element={<Apply />} />
         <Route
           path="/flowchart"
