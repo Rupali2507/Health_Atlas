@@ -138,7 +138,7 @@ const Sidebar = () => {
             className={`flex items-center gap-4 p-3 cursor-pointer ${hoverBg}`}
           >
             <HiOutlineChartBar className="w-5 h-5" />
-            <div>Flow Chart</div>
+            <div>Pipeline</div>
           </div>
 
         </div>

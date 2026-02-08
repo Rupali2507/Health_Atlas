@@ -2,11 +2,10 @@ import React, { useState, useEffect } from "react";
 import { 
   Users, 
   ClipboardList, 
-  Clock, 
+  CheckCircle,
   ShieldAlert, 
   TrendingDown, 
   Activity, 
-  Calendar, 
   Zap,
   RefreshCw 
 } from "lucide-react";
@@ -188,54 +187,54 @@ const Dashboard = () => {
                   Validation Path Distribution
                 </h2>
                 <p className={`text-sm ${textSecondary} mt-1`}>
-                  Provider confidence scores across GREEN, YELLOW, and RED paths
+                  Provider confidence scores across PLATINUM, GOLD, and QUESTIONABLE tiers
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* GREEN Path */}
+              {/* PLATINUM Path (GREEN) */}
               <div className={`p-5 rounded-xl border ${Dark ? "bg-emerald-500/5 border-emerald-500/20" : "bg-emerald-50 border-emerald-200"}`}>
                 <div className="flex justify-between items-start mb-3">
                   <div className={`p-2.5 rounded-lg ${Dark ? "bg-emerald-500/10" : "bg-emerald-100"}`}>
-                    <Calendar size={20} className="text-emerald-600" />
+                    <CheckCircle size={20} className="text-emerald-600" />
                   </div>
                   <span className={`text-xs font-semibold px-2 py-1 rounded ${Dark ? "bg-emerald-500/20 text-emerald-400" : "bg-emerald-200 text-emerald-700"}`}>
-                    GREEN
+                    PLATINUM
                   </span>
                 </div>
                 <p className="text-3xl font-bold mb-1">{greenCount}</p>
                 <p className="text-sm font-semibold text-emerald-600 mb-1">Auto-Approved</p>
-                <p className={`text-xs ${textSecondary}`}>High confidence (85%+)</p>
+                <p className={`text-xs ${textSecondary}`}>High confidence (≥85%)</p>
               </div>
 
-              {/* YELLOW Path */}
+              {/* GOLD Path (YELLOW) */}
               <div className={`p-5 rounded-xl border ${Dark ? "bg-yellow-500/5 border-yellow-500/20" : "bg-yellow-50 border-yellow-200"}`}>
                 <div className="flex justify-between items-start mb-3">
                   <div className={`p-2.5 rounded-lg ${Dark ? "bg-yellow-500/10" : "bg-yellow-100"}`}>
-                    <Clock size={20} className="text-yellow-600" />
+                    <Activity size={20} className="text-yellow-600" />
                   </div>
                   <span className={`text-xs font-semibold px-2 py-1 rounded ${Dark ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-200 text-yellow-700"}`}>
-                    YELLOW
+                    GOLD
                   </span>
                 </div>
                 <p className="text-3xl font-bold mb-1">{yellowCount}</p>
-                <p className="text-sm font-semibold text-yellow-600 mb-1">Needs Review</p>
+                <p className="text-sm font-semibold text-yellow-600 mb-1">Auto-Approved + Monitored</p>
                 <p className={`text-xs ${textSecondary}`}>Medium confidence (65-84%)</p>
               </div>
 
-              {/* RED Path */}
+              {/* QUESTIONABLE Path (RED) */}
               <div className={`p-5 rounded-xl border ${Dark ? "bg-red-500/5 border-red-500/20" : "bg-red-50 border-red-200"}`}>
                 <div className="flex justify-between items-start mb-3">
                   <div className={`p-2.5 rounded-lg ${Dark ? "bg-red-500/10" : "bg-red-100"}`}>
                     <TrendingDown size={20} className="text-red-600" />
                   </div>
                   <span className={`text-xs font-semibold px-2 py-1 rounded ${Dark ? "bg-red-500/20 text-red-400" : "bg-red-200 text-red-700"}`}>
-                    RED
+                    QUESTIONABLE
                   </span>
                 </div>
                 <p className="text-3xl font-bold mb-1">{redCount}</p>
-                <p className="text-sm font-semibold text-red-600 mb-1">Critical Issues</p>
+                <p className="text-sm font-semibold text-red-600 mb-1">Human Review Required</p>
                 <p className={`text-xs ${textSecondary}`}>Low confidence (&lt;65%)</p>
               </div>
             </div>
@@ -305,7 +304,7 @@ const Dashboard = () => {
                     <thead className={`border-b ${Dark ? "border-gray-700" : "border-gray-100"}`}>
                       <tr>
                         <th className="pb-2 font-medium">Provider</th>
-                        <th className="pb-2 font-medium">Path</th>
+                        <th className="pb-2 font-medium">Tier</th>
                         <th className="pb-2 font-medium">Score</th>
                       </tr>
                     </thead>
@@ -316,12 +315,17 @@ const Dashboard = () => {
                           r.path === 'YELLOW' ? 'bg-yellow-100 text-yellow-700' :
                           'bg-red-100 text-red-700';
                         
+                        const pathLabel = 
+                          r.path === 'GREEN' ? 'PLATINUM' :
+                          r.path === 'YELLOW' ? 'GOLD' :
+                          'QUESTIONABLE';
+                        
                         return (
                           <tr key={i} className={`border-b ${Dark ? "border-gray-700/30" : "border-gray-100"}`}>
                             <td className="py-2">{r.provider_name || 'Unknown'}</td>
                             <td className="py-2">
                               <span className={`px-2 py-0.5 rounded text-xs font-semibold ${pathColor}`}>
-                                {r.path || 'N/A'}
+                                {pathLabel}
                               </span>
                             </td>
                             <td className="py-2 font-mono">{(r.confidence_score * 100).toFixed(0)}%</td>

@@ -495,7 +495,6 @@ export default function FlowChart() {
                 <span>End of DAG Execution Pipeline</span>
               </div>
               <div className="text-[10px]">
-                Built with ❤️ by Rupali, Prisha, Muskan & Shivendu
               </div>
             </div>
 
