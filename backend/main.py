@@ -23,6 +23,8 @@ from psycopg2.extras import RealDictCursor
 from fastapi import WebSocket, WebSocketDisconnect
 
 from agent import app as validation_agent_app
+from pipeline.ocr_pipeline import run_ocr
+
 from tools import parse_provider_pdf
 
 app = FastAPI(title="Health Atlas Provider Validator v2.1")
@@ -209,41 +211,56 @@ async def validate_file(file: UploadFile = File(...)):
             # File is already saved, now process it
             provider_list = []
             
-            if file.filename.endswith('.csv'):
+            suffixes = Path(file.filename.lower()).suffixes
+
+
+            # ======================
+            # CSV
+            # ======================
+            if '.csv' in suffixes:
                 yield f"data: {json.dumps({'type': 'log', 'content': '📄 Reading CSV file...'})}\n\n"
                 df = pd.read_csv(temp_filename, dtype=str).fillna("")
                 provider_list = df.to_dict(orient='records')
-            
-            elif file.filename.endswith('.pdf'):
-                yield f"data: {json.dumps({'type': 'log', 'content': '🔍 Parsing PDF with Vision AI...'})}\n\n"
+
+            # ======================
+            # PDF / IMAGE → GEMINI OCR
+            # ======================
+            elif any(ext in suffixes for ext in ['.pdf', '.png', '.jpg', '.jpeg']):
                 
-                # Add detailed error catching here
+                print("🔥 ENTERED OCR BRANCH")
+                print("🔥 CALLING run_ocr WITH:", temp_filename)
+
+                yield f"data: {json.dumps({'type': 'log', 'content': '🖼️ Running Gemini OCR (VLM)...'})}\n\n"
+
                 try:
-                    provider_list = parse_provider_pdf(temp_filename)
+                    provider_list = run_ocr(temp_filename)
+                    print("🔥 run_ocr RETURNED:", type(provider_list), provider_list)
+
                     
-                    # Check if extraction returned an error
-                    if provider_list and isinstance(provider_list[0], dict) and provider_list[0].get("error"):
-                        error_msg = provider_list[0]["error"]
-                        yield f"data: {json.dumps({'type': 'log', 'content': f'❌ PDF Extraction Error: {error_msg}'})}\n\n"
-                        provider_list = []
-                    else:
-                        yield f"data: {json.dumps({'type': 'log', 'content': f'✅ Extracted {len(provider_list)} providers from PDF'})}\n\n"
-                        
-                except Exception as pdf_error:
-                    error_details = f"{type(pdf_error).__name__}: {str(pdf_error)}"
-                    yield f"data: {json.dumps({'type': 'log', 'content': f'❌ PDF Processing Failed: {error_details}'})}\n\n"
-                    
-                    # Send more detailed error info
-                    import traceback
-                    tb = traceback.format_exc()
-                    print(f"PDF Extraction Error:\n{tb}")
-                    
-                    yield f"data: {json.dumps({'type': 'log', 'content': f'💡 Check console for detailed error trace'})}\n\n"
+
+                    if (
+                        provider_list
+                        and isinstance(provider_list, list)
+                        and isinstance(provider_list[0], dict)
+                        and provider_list[0].get("error")
+                    ):
+                        raise ValueError(provider_list[0]["error"])
+
+                    yield f"data: {json.dumps({'type': 'log', 'content': f'✅ Gemini OCR extracted {len(provider_list)} providers'})}\n\n"
+
+                except Exception as e:
+                    yield f"data: {json.dumps({'type': 'log', 'content': f'❌ Gemini OCR failed: {str(e)}'})}\n\n"
                     provider_list = []
-                    
+
+            # ======================
+            # UNSUPPORTED
+            # ======================
             else:
-                yield f"data: {json.dumps({'type': 'log', 'content': '❌ Unsupported file format. Use CSV or PDF.'})}\n\n"
+                yield f"data: {json.dumps({'type': 'log', 'content': '❌ Unsupported file format. Use CSV, PDF, or image.'})}\n\n"
                 return
+
+                                    
+            
 
             total_records = len(provider_list)
             if total_records == 0:
