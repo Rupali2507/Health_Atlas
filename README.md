@@ -40,7 +40,7 @@ Gemini Flash 2.5 extracts provider data from **scanned PDFs** with 95%+ accuracy
 <td width="33%" align="center">
 
 ### 🎯 **Smart Confidence Scoring**
-6-dimensional scoring engine with adaptive thresholds (75% GREEN, 55% YELLOW) ensures optimal auto-approval rates while maintaining quality.
+6-dimensional scoring engine with adaptive thresholds (85% GREEN, 65% YELLOW) ensures optimal auto-approval rates while maintaining quality.
 
 </td>
 <td width="33%" align="center">
@@ -67,7 +67,6 @@ Intelligent review queue routes low-confidence providers to human reviewers with
 │  • Review Queue Management UI                                           │
 │  • File Upload (CSV/PDF/Excel/Images)                                   │
 │  • Live Validation Progress Tracking                                    │
-│  • 3D Analytics Visualizations                                          │
 └────────────────┬─────────────────────────────────────────────────────────┘
                  │
                  │ REST API + Auto-Refresh (30s polling)
@@ -451,9 +450,9 @@ else:
 
 | Tier | Score Range | Expected % | Actual % | Action |
 |------|-------------|------------|----------|--------|
-| 🟢 **GREEN** | 75-100% | 40% | **42%** | Auto-approve to `validated_providers` |
-| 🟡 **YELLOW** | 55-74% | 30% | **28%** | Send to `review_queue` (low priority) |
-| 🔴 **RED** | 0-54% | 30% | **30%** | Send to `review_queue` (high priority) |
+| 🟢 **GREEN** | 85-100% | 40% | **42%** | Auto-approve to `validated_providers` |
+| 🟡 **YELLOW** | 65-74% | 30% | **28%** | Send to `review_queue` (low priority) |
+| 🔴 **RED** | 0-64% | 30% | **30%** | Send to `review_queue` (high priority) |
 
 ---
 
@@ -467,13 +466,13 @@ def hitl_decision_node(state: AgentState) -> Literal["auto_approve", "human_revi
     Router: Auto-approve vs Human review
     
     Auto-approve if:
-    • Confidence ≥ 75%
+    • Confidence ≥ 65%
     • No critical QA flags
     • No fraud indicators
     • License active OR skipped with high NPI confidence
     
     Human review if:
-    • Confidence < 75%
+    • Confidence < 65%
     • License suspended/revoked
     • Fraud indicators present
     • Address verification failed
@@ -662,7 +661,7 @@ POST /api/review-queue/{review_id}/reject
 | **VLM Primary** | Gemini 2.5 Flash | Latest | PDF/image extraction (FREE) |
 | **VLM Fallback #1** | GPT-4o-mini | Latest | Backup extraction |
 | **VLM Fallback #2** | Claude Haiku | Latest | Final fallback |
-| **Database ORM** | SQLAlchemy | 2.0+ | Type-safe database access |
+| **Database ** | PostgreSQL |
 | **File Processing** | pdf2image + Pillow | Latest | PDF→Image conversion |
 | **Excel Parsing** | openpyxl + pandas | Latest | Multi-sheet Excel support |
 
