@@ -51,12 +51,12 @@ from selenium import webdriver
 from selenium.webdriver.edge.options import Options
 from bs4 import BeautifulSoup
 
-# VLM/OCR APIs
-import google.generativeai as genai
-try:
-    from openai import OpenAI
-except ImportError:
-    OpenAI = None
+# # VLM/OCR APIs
+# import google.generativeai as genai
+# try:
+#     from openai import OpenAI
+# except ImportError:
+#     OpenAI = None
     
 try:
     from anthropic import Anthropic
@@ -752,6 +752,7 @@ def extract_with_claude_haiku(images: List[Image.Image], source_name: str = "doc
     
     try:
         client = Anthropic(api_key=api_key)
+        images = convert_from_path(pdf_path, dpi=300, fmt='jpeg')
         all_providers = []
         
         for page_num, image in enumerate(images, 1):

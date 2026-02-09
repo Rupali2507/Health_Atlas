@@ -101,11 +101,11 @@ def quick_check():
     except ImportError:
         results.append(check("pandas", False, "pip install pandas"))
     
-    try:
-        import google.generativeai
-        results.append(check("google-generativeai", True))
-    except ImportError:
-        results.append(check("google-generativeai", False, "pip install google-generativeai"))
+    # try:
+    #     import google.generativeai
+    #     results.append(check("google-generativeai", True))
+    # except ImportError:
+    #     results.append(check("google-generativeai", False, "pip install google-generativeai"))
     
     try:
         import langchain_groq

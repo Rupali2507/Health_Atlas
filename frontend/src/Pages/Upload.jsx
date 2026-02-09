@@ -146,54 +146,51 @@ const Upload = () => {
         buffer = events.pop() || "";
 
         for (const event of events) {
-          if (!event.trim()) continue;
-          const lines = event.split("\n");
+          if (!event.startsWith("data:")) continue;
 
-          for (const line of lines) {
-            if (line.startsWith("data:")) {
-              const dataStr = line.substring(5).trim();
-              if (dataStr && dataStr !== "[DONE]") {
-                try {
-                  const data = JSON.parse(dataStr);
+          const jsonStr = event.replace(/^data:\s*/, "").trim();
+          if (!jsonStr) continue;
 
-                  if (data.type === "log") {
-                    let type = "info";
-                    const content = data.content.toLowerCase();
-                    
-                    if (content.includes("error") || content.includes("❌")) type = "error";
-                    else if (content.includes("✅") || content.includes("complete")) type = "success";
-                    else if (content.includes("🟢")) type = "success";
-                    else if (content.includes("🟡")) type = "warning";
-                    else if (content.includes("🔴")) type = "error";
+          try {
+            const data = JSON.parse(jsonStr);
 
-                    setLog((prev) => [...prev, {
-                      message: data.content,
-                      type,
-                      timestamp: new Date().toLocaleTimeString()
-                    }]);
+            if (data.type === "log") {
+              let type = "info";
+              const content = data.content.toLowerCase();
 
-                  } else if (data.type === "result") {
-                    currentRunResults.push(data.data);
-                    setResults((prev) => [...prev, data.data]);
+              if (content.includes("error") || content.includes("❌")) type = "error";
+              else if (content.includes("✅") || content.includes("complete")) type = "success";
+              else if (content.includes("🟢")) type = "success";
+              else if (content.includes("🟡")) type = "warning";
+              else if (content.includes("🔴")) type = "error";
 
-                  } else if (data.type === "close") {
-                    setIsLoading(false);
-                    setIsFinished(true);
-                    if (currentRunResults.length > 0) {
-                      addValidationRun({ 
-                        fileName: selectedFile.name, 
-                        results: currentRunResults,
-                        timestamp: new Date().toISOString()
-                      });
-                    }
-                  }
-                } catch (parseErr) { 
-                  console.error("JSON parse error:", parseErr);
-                }
+              setLog(prev => [...prev, {
+                message: data.content,
+                type,
+                timestamp: new Date().toLocaleTimeString()
+              }]);
+
+            } else if (data.type === "result") {
+              currentRunResults.push(data.data);
+              setResults(prev => [...prev, data.data]);
+
+            } else if (data.type === "close") {
+              setIsLoading(false);
+              setIsFinished(true);
+
+              if (currentRunResults.length > 0) {
+                addValidationRun({
+                  fileName: selectedFile.name,
+                  results: currentRunResults,
+                  timestamp: new Date().toISOString()
+                });
               }
             }
+          } catch (err) {
+            console.error("SSE parse error:", err, jsonStr);
           }
         }
+
       }
 
       if (isLoading) {
