@@ -30,7 +30,7 @@ pgeocode==0.5.0
 #deployment
 gunicorn
 
-google-generativeai 
+google-genai
 pdf2image 
 Pillow
 
