@@ -424,19 +424,19 @@ export default function FlowChart() {
             <Section step="06" title="Directory Management Agent (Routing + Output + Workflow)" Dark={Dark} icon={Layers}>
               <div className="grid md:grid-cols-3 gap-6">
                 <Node 
-                  title="🟢 HIGH CONFIDENCE ≥ 80%" 
+                  title="🟢 HIGH CONFIDENCE ≥ 85%" 
                   subtitle="Auto-commit to validated_providers table • Majority of records" 
                   Dark={Dark} 
                   accent="green" 
                 />
                 <Node 
-                  title="🟡 MEDIUM CONFIDENCE 60-79%" 
+                  title="🟡 MEDIUM CONFIDENCE 65-84%" 
                   subtitle="Auto-approve with monitoring flags • Significant portion" 
                   Dark={Dark} 
                   accent="amber" 
                 />
                 <Node 
-                  title="🔴 LOW CONFIDENCE <60%" 
+                  title="🔴 LOW CONFIDENCE <65%" 
                   subtitle="Human review required → review_queue table • Minority of records" 
                   Dark={Dark} 
                   accent="red" 
