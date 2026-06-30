@@ -34,17 +34,17 @@ const App = () => {
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute>
+           
               <Dashboard />
-            </ProtectedRoute>
+            
           }
         />
         <Route
           path="/upload"
           element={
-            <ProtectedRoute>
+            
               <Upload />
-            </ProtectedRoute>
+            
           }
         />
         <Route path="/provider" element={<Provider />} />
@@ -55,9 +55,9 @@ const App = () => {
         <Route
           path="/flowchart"
           element={
-            <ProtectedRoute>
+            
               <FlowChart />
-            </ProtectedRoute>
+            
           }
         />
 
