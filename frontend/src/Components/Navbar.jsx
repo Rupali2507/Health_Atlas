@@ -98,14 +98,14 @@ const Navbar = ({
 
           {/* Auth Buttons */}
           <button
-            onClick={() => navigate("/login")}
+            onClick={() => navigate("/dasboard")}
             className={`px-4 py-1 rounded-lg font-medium transition-colors duration-300 bg-blue-900 text-white hover:bg-blue-950
             }`}
           >
             Login
           </button>
           <button
-            onClick={() => navigate("/signUp")}
+            onClick={() => navigate("/dashboard")}
             className={`px-4 py-1 rounded-lg font-medium border-2 transition-colors duration-300 ${
               Dark
                 ? "border-gray-600 text-gray-200 hover:bg-gray-800"
